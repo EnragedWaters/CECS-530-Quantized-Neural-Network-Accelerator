@@ -1,17 +1,18 @@
 # Class messages, personal notes, and earlier planning
 /_local/
+/ROADMAP.md
 
 # Python environments and generated caches
 __pycache__/
+.ipynb_checkpoints/
 *.py[cod]
 .venv/
 
 # Downloaded dataset files
 /workloads/mnist/data/*.gz
 
-# Existing prototype: introduce reviewed pieces in later commits.
-# These rules hide untracked files, not changes to tracked files.
-# Remove this temporary section once the implementation is introduced.
+# Local prototype files; the notebook is the current project artifact.
+# Introduce other files only when needed for a reviewed project step.
 /configs/
 /qnn/
 /tests/
