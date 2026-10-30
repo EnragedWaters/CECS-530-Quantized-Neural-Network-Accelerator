@@ -1,0 +1,23 @@
+# Class messages, personal notes, and earlier planning
+/_local/
+
+# Python environments and generated caches
+__pycache__/
+*.py[cod]
+.venv/
+
+# Downloaded dataset files
+/workloads/mnist/data/*.gz
+
+# Existing prototype: introduce reviewed pieces in later commits.
+# These rules hide untracked files, not changes to tracked files.
+# Remove this temporary section once the implementation is introduced.
+/configs/
+/qnn/
+/tests/
+/workloads/
+/results/
+/requirements.txt
+/start_here.py
+/docs/*
+!/docs/scope.md
