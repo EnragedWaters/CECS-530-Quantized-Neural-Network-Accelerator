@@ -9,4 +9,4 @@ To run it, open [Google Colab](https://colab.research.google.com/), select
 **File → Upload notebook**, then **Runtime → Run all**. No package installation
 is needed.
 
-[Project scope](docs/scope.md)
+[Project scope](docs/scope.md) · [Design references](docs/reference-review.md)

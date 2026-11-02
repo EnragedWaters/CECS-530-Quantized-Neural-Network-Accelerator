@@ -22,3 +22,4 @@ __pycache__/
 /start_here.py
 /docs/*
 !/docs/scope.md
+!/docs/reference-review.md
