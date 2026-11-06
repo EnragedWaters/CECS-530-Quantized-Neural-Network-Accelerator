@@ -1,0 +1,210 @@
+{
+  "schema_version": 1,
+  "kind": "accelerator",
+  "producer": "03-accelerator-model.ipynb",
+  "environment": {
+    "python": "3.12.3"
+  },
+  "network_dimensions": [
+    784,
+    64,
+    10
+  ],
+  "timing_scope": "matrix_stages_only",
+  "clock_hz": 100000000,
+  "base_config": {
+    "lanes": 8,
+    "scratchpad_bytes": 262144,
+    "local_read_bytes_per_cycle": 32,
+    "external_bytes_per_cycle": 32
+  },
+  "baseline_layers": {
+    "fp32": [
+      {
+        "name": "Layer 1",
+        "precision": "fp32",
+        "rows": 1,
+        "inner": 784,
+        "columns": 64,
+        "macs": 50176,
+        "total_cycles": 18922,
+        "load_inputs_cycles": 98,
+        "load_weights_cycles": 6272,
+        "compute_cycles": 12544,
+        "store_outputs_cycles": 8,
+        "input_bytes": 3136,
+        "weight_bytes": 200704,
+        "output_bytes": 256,
+        "scratchpad_required_bytes": 204096,
+        "external_bytes_transferred": 204096,
+        "local_operand_bytes_read": 401408,
+        "bandwidth_blocked_lane_cycles": 50144,
+        "compute_lane_utilization": 0.5,
+        "macs_per_total_cycle": 2.6517281471303247
+      },
+      {
+        "name": "Layer 2",
+        "precision": "fp32",
+        "rows": 1,
+        "inner": 64,
+        "columns": 10,
+        "macs": 640,
+        "total_cycles": 282,
+        "load_inputs_cycles": 8,
+        "load_weights_cycles": 80,
+        "compute_cycles": 192,
+        "store_outputs_cycles": 2,
+        "input_bytes": 256,
+        "weight_bytes": 2560,
+        "output_bytes": 40,
+        "scratchpad_required_bytes": 2856,
+        "external_bytes_transferred": 2856,
+        "local_operand_bytes_read": 5120,
+        "bandwidth_blocked_lane_cycles": 508,
+        "compute_lane_utilization": 0.4166666666666667,
+        "macs_per_total_cycle": 2.269503546099291
+      }
+    ],
+    "int8": [
+      {
+        "name": "Layer 1",
+        "precision": "int8",
+        "rows": 1,
+        "inner": 784,
+        "columns": 64,
+        "macs": 50176,
+        "total_cycles": 7873,
+        "load_inputs_cycles": 25,
+        "load_weights_cycles": 1568,
+        "compute_cycles": 6272,
+        "store_outputs_cycles": 8,
+        "input_bytes": 784,
+        "weight_bytes": 50176,
+        "output_bytes": 256,
+        "scratchpad_required_bytes": 51216,
+        "external_bytes_transferred": 51216,
+        "local_operand_bytes_read": 100352,
+        "bandwidth_blocked_lane_cycles": 0,
+        "compute_lane_utilization": 1.0,
+        "macs_per_total_cycle": 6.373174139463991
+      },
+      {
+        "name": "Layer 2",
+        "precision": "int8",
+        "rows": 1,
+        "inner": 64,
+        "columns": 10,
+        "macs": 640,
+        "total_cycles": 152,
+        "load_inputs_cycles": 2,
+        "load_weights_cycles": 20,
+        "compute_cycles": 128,
+        "store_outputs_cycles": 2,
+        "input_bytes": 64,
+        "weight_bytes": 640,
+        "output_bytes": 40,
+        "scratchpad_required_bytes": 744,
+        "external_bytes_transferred": 744,
+        "local_operand_bytes_read": 1280,
+        "bandwidth_blocked_lane_cycles": 0,
+        "compute_lane_utilization": 0.625,
+        "macs_per_total_cycle": 4.2105263157894735
+      }
+    ]
+  },
+  "lane_sweep": [
+    {
+      "config": {
+        "lanes": 4,
+        "scratchpad_bytes": 262144,
+        "local_read_bytes_per_cycle": 32,
+        "external_bytes_per_cycle": 32
+      },
+      "fp32_cycles": 19204,
+      "int8_cycles": 14361
+    },
+    {
+      "config": {
+        "lanes": 8,
+        "scratchpad_bytes": 262144,
+        "local_read_bytes_per_cycle": 32,
+        "external_bytes_per_cycle": 32
+      },
+      "fp32_cycles": 19204,
+      "int8_cycles": 8025
+    },
+    {
+      "config": {
+        "lanes": 16,
+        "scratchpad_bytes": 262144,
+        "local_read_bytes_per_cycle": 32,
+        "external_bytes_per_cycle": 32
+      },
+      "fp32_cycles": 19172,
+      "int8_cycles": 4825
+    },
+    {
+      "config": {
+        "lanes": 32,
+        "scratchpad_bytes": 262144,
+        "local_read_bytes_per_cycle": 32,
+        "external_bytes_per_cycle": 32
+      },
+      "fp32_cycles": 19172,
+      "int8_cycles": 4825
+    }
+  ],
+  "external_bandwidth_sweep": [
+    {
+      "config": {
+        "lanes": 32,
+        "scratchpad_bytes": 262144,
+        "local_read_bytes_per_cycle": 32,
+        "external_bytes_per_cycle": 8
+      },
+      "fp32_cycles": 38573,
+      "int8_cycles": 9695
+    },
+    {
+      "config": {
+        "lanes": 32,
+        "scratchpad_bytes": 262144,
+        "local_read_bytes_per_cycle": 32,
+        "external_bytes_per_cycle": 16
+      },
+      "fp32_cycles": 25639,
+      "int8_cycles": 6448
+    },
+    {
+      "config": {
+        "lanes": 32,
+        "scratchpad_bytes": 262144,
+        "local_read_bytes_per_cycle": 32,
+        "external_bytes_per_cycle": 32
+      },
+      "fp32_cycles": 19172,
+      "int8_cycles": 4825
+    },
+    {
+      "config": {
+        "lanes": 32,
+        "scratchpad_bytes": 262144,
+        "local_read_bytes_per_cycle": 32,
+        "external_bytes_per_cycle": 64
+      },
+      "fp32_cycles": 15938,
+      "int8_cycles": 4013
+    },
+    {
+      "config": {
+        "lanes": 32,
+        "scratchpad_bytes": 262144,
+        "local_read_bytes_per_cycle": 32,
+        "external_bytes_per_cycle": 128
+      },
+      "fp32_cycles": 14322,
+      "int8_cycles": 3608
+    }
+  ],
+  "checks_passed": 15
+}

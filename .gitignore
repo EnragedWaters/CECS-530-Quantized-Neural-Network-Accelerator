@@ -18,7 +18,10 @@ __pycache__/
 /qnn/
 /tests/
 /workloads/
-/results/
+/results/*
+!/results/accelerator-results.json
+!/results/mnist-results.json
+/notebooks/results/
 /requirements.txt
 /start_here.py
 /docs/*
