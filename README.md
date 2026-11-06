@@ -155,5 +155,5 @@ document contains the architecture and quantization discussion.
 
 ## 12. Team Members
 
-The project roster is not identified in the repository files. Add the team
-members' names here.
+Tuong Tran
+Troy Waters
