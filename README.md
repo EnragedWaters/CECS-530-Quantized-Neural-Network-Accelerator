@@ -19,10 +19,9 @@ are outside the timing model.
 | [06 — Results and graphs](notebooks/06-results-and-graphs.ipynb) | Plots recorded accuracy and timing values. |
 
 Each notebook contains its own code and can run independently.
-Notebook 05 currently uses floating-point bias and rescaling steps and chooses
-its intermediate scale from the test images. Calibration will be revised to use
-separate images. Notebook 06 plots manually entered values rather than rerunning
-the experiments.
+Notebook 05 uses floating-point bias and rescaling steps. Its intermediate scale
+is chosen from 1,000 separate calibration images and stays fixed during testing.
+Notebook 06 plots manually entered values rather than rerunning the experiments.
 
 ## Running a notebook
 
