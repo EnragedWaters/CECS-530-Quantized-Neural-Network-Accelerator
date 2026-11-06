@@ -15,14 +15,15 @@ are outside the timing model.
 | [02 — Quantized arithmetic](notebooks/02-quantized-arithmetic.ipynb) | Explains INT8 values, INT32 totals, rounding, and clipping, with checked examples. |
 | [03 — Accelerator model](notebooks/03-accelerator-model.ipynb) | Models computation and data movement; compares precision, processing lanes, and bandwidth. |
 | [04 — MNIST workload](notebooks/04-mnist-workload.ipynb) | Trains the FP32 digit-recognition network and checks its predictions and accuracy. |
-| [05 — Quantized predictions](notebooks/05-int8-mnist-inference.ipynb) | Compares FP32 predictions with calibrated INT8 arithmetic, including integer biases and rescaling. |
+| [05 — Quantized predictions](notebooks/05-int8-mnist-inference.ipynb) | Compares calibrated INT8 with FP32 and verifies 16 real images through the accelerator model. |
 | [06 — Results and graphs](notebooks/06-results-and-graphs.ipynb) | Plots recorded accuracy and timing values. |
 
 Each notebook contains its own code and can run independently.
 Notebook 05 includes a mixed-precision reference and an integer prediction core.
 The integer core uses INT32 biases and an INT64 temporary for rescaling. Its scale
 is chosen from 1,000 calibration images and stays fixed during testing.
-Notebook 06 plots manually entered values rather than rerunning the experiments.
+Simulated INT8 results match the reference exactly; FP32 results match within a
+stated tolerance. Notebook 06 plots manually entered values rather than rerunning experiments.
 
 ## Running a notebook
 
