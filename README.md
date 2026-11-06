@@ -31,7 +31,7 @@ design, not predict performance on a particular manufactured device.
 |---|---|
 | `notebooks/02-quantized-arithmetic.ipynb` | Quantized arithmetic explanations, examples, and 13 checks |
 | `notebooks/03-accelerator-model.ipynb` | Software accelerator model |
-| `notebooks/04-mnist-workload copy.ipynb` | MNIST workload |
+| `notebooks/04-mnist-workload.ipynb` | MNIST workload |
 | `notebooks/05-int8-mnist-inference.ipynb` | INT8 MNIST inference and accuracy evaluation |
 | `notebooks/06-results-and-graphs.ipynb` | Results, experiments, and graphs |
 | `notebooks/mnist-cache/` | Cached MNIST dataset files |
@@ -132,7 +132,7 @@ The other project notebooks can be opened the same way:
 2. Select **File → Upload notebook** and choose a notebook from `notebooks/`.
 3. Use **Runtime → Run all** to execute that notebook.
 4. For the experiment results, use the workload, INT8 inference, and results
-  notebooks: `04-mnist-workload copy.ipynb`, `05-int8-mnist-inference.ipynb`,
+  notebooks: `04-mnist-workload.ipynb`, `05-int8-mnist-inference.ipynb`,
   and `06-results-and-graphs.ipynb`.
 
 [Project scope](docs/scope.md) · [Design references](docs/reference-review.md)

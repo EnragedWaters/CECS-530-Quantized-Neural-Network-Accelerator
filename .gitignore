@@ -10,6 +10,7 @@ __pycache__/
 
 # Downloaded dataset files
 /workloads/mnist/data/*.gz
+/notebooks/mnist-cache/
 
 # Local prototype files; the notebook is the current project artifact.
 # Introduce other files only when needed for a reviewed project step.
