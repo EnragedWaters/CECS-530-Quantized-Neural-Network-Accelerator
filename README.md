@@ -44,7 +44,7 @@ For a quick reproduction without retraining, use the checked
 [MNIST export](results/mnist-results.json). A full checkout loads these files
 automatically. Fresh exports replace these snapshots when publishing new results.
 
-[Project scope](docs/scope.md) · [Design references](docs/reference-review.md)
+[Project scope](docs/scope.md) · [Design references](docs/reference-review.md) · [Project report](report/project-report.md)
 
 ## Team members
 
