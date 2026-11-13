@@ -6,6 +6,8 @@ The main talk uses slides 1–14 and is planned for 15 minutes. Slides 15–18 a
 
 Suggested split: Troy covers slides 1–8 (8 minutes 10 seconds); Tuong covers 9–14 (6 minutes 50 seconds). The split can change, but the professor requires both members to participate and understand the entire project. These timings are a rehearsal plan, not a measured presentation runtime.
 
+Theme: Midnight Circuit — navy titles, light backgrounds, teal accents, blue FP32 charts, and warm orange INT8 charts. Text, diagrams, and chart data stay editable in PowerPoint. The PDF preserves the rendered layout.
+
 ## Timing plan
 
 | Slide | Topic | Presenter | Time | Cumulative |
