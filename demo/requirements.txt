@@ -1,0 +1,2 @@
+# Runtime dependency; Python 3.12 is the reference environment.
+numpy==1.26.4
