@@ -20,6 +20,11 @@ class ServerTests(unittest.TestCase):
         with urlopen(self.url) as response:self.assertIn(b'Inside our accelerator',response.read())
         with self.post('/api/simulate',json.dumps({'config':{'lanes':1}})) as response:r=json.load(response)
         self.assertEqual(r['output'],[[29]]);self.assertEqual(r['metrics']['total_cycles'],6)
+    def test_quantization_clipping_and_integer_units(self):
+        with self.post('/api/quantize',json.dumps({'value':200,'scale':1})) as response:q=json.load(response)
+        self.assertEqual(q['stored'],127);self.assertTrue(q['clipped'])
+        self.assertEqual(q['large_product'],16129);self.assertEqual(q['biased_total'],24);self.assertEqual(q['rescaled'],6)
+
     def test_private_paths_are_not_served(self):
         for path in ('/../.git/config','/_local/README.md','/assets/network.npz'):
             with self.assertRaises(HTTPError) as e:urlopen(self.url+path)
