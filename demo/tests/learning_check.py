@@ -73,6 +73,7 @@ def check_learning(page, url, screenshots):
             page.locator("#explore-toggle").click()
             frame = page.frame_locator("#explore-frame")
             expect(frame.locator("#toy-stage")).to_be_visible()
+            expect(frame.locator('a[href="/"]')).to_have_count(0)
             frame.locator("#toy-lanes").select_option("16")
             page.locator("#explore-toggle").click()
             expect(page.locator("#lesson-visual")).to_be_visible()
