@@ -8,6 +8,12 @@ The accelerator is a software model. Its timing covers matrix calculations and
 data transfers; bias, activation, rescaling, and choosing the predicted digit
 are outside the timing model.
 
+## Submission files
+
+The **[SUBMISSION](SUBMISSION)** folder contains the two files to upload:
+[report PDF](SUBMISSION/project-report-group-15.pdf) and
+[PowerPoint](SUBMISSION/project-presentation-group-15.pptx).
+
 ## Run the visual demo
 
 Open **[ONE-CLICK-LAUNCHERS](ONE-CLICK-LAUNCHERS/README.md)** and use the launcher

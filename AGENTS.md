@@ -15,6 +15,10 @@ explains that work with actual calculations and the same timing assumptions.
 - `notebooks/`: independently runnable notebooks 02–06; retain that independence.
 - `results/`: the two published experiment exports used by the report and graphs.
 - `report/` and `presentation/`: submitted deliverables and speaking guide.
+- `SUBMISSION/`: only the report PDF and PowerPoint with the `group-15` filenames.
+  Refresh these copies from `report/project-report.pdf` and
+  `presentation/project-presentation.pptx` whenever those deliverables change;
+  verify byte-for-byte equality. Keep preparation notes and archives in `_local/`.
 - `docs/`: public scope and design references. Other planning belongs in `_local/`.
 - `_local/`, `ROADMAP.md`, environments, caches, and prototypes are ignored/private.
   Earlier scripts/data were moved together into `_local/legacy-prototype/`;
