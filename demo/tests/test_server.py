@@ -57,6 +57,26 @@ class ServerTests(unittest.TestCase):
                 urlopen(self.url + path)
             self.assertEqual(e.exception.code, 404)
 
+    def test_real_prediction_and_hardware_routes_work_without_downloads(self):
+        from unittest.mock import patch
+
+        with patch(
+            "urllib.request.urlopen",
+            side_effect=AssertionError("No dataset downloads during a demo"),
+        ):
+            with self.post("/api/infer", json.dumps({"example_id": 8})) as response:
+                result = json.load(response)
+            self.assertEqual(result["label"], 5)
+            self.assertEqual(result["int8"]["prediction"], 6)
+            self.assertTrue(result["verification"]["integer_exact"])
+            with self.post(
+                "/api/hardware", json.dumps({"config": {"scratchpad_bytes": 65536}})
+            ) as response:
+                result = json.load(response)
+            self.assertIn("error", result["results"]["fp32"])
+            self.assertEqual(result["results"]["int8"]["total_cycles"], 8025)
+            self.assertIsNone(result["speedup"])
+
     def test_invalid_settings_are_readable_errors(self):
         for payload in ('{"config":{"lanes":0}}', '{"config":{"lanes":NaN}}', "[]"):
             with self.assertRaises(HTTPError) as e:

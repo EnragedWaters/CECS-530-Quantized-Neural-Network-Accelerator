@@ -1,0 +1,2 @@
+# Optional browser verification only. The demo itself requires just NumPy.
+playwright==1.64.1

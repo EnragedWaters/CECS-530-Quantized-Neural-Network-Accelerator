@@ -8,6 +8,21 @@ The accelerator is a software model. Its timing covers matrix calculations and
 data transfers; bias, activation, rescaling, and choosing the predicted digit
 are outside the timing model.
 
+## Run the visual demo
+
+Open **[ONE-CLICK-LAUNCHERS](ONE-CLICK-LAUNCHERS/README.md)** and use the launcher
+for your computer. Windows uses **Launch Demo.bat**; macOS uses **Launch Demo.command**;
+Linux/WSL can run `sh "ONE-CLICK-LAUNCHERS/Launch Demo.command"` from this repo.
+
+Python 3.10–3.14 is needed (3.12 recommended). The launcher handles NumPy setup
+and opens the browser. First setup needs internet; later runs work offline.
+Select **Start guided tour** to follow numbers, processing lanes, real digit
+predictions, and memory limits. See the [demo guide](demo/README.md) for presenting
+and troubleshooting. Keep the downloaded repo together and extract ZIPs first.
+
+The app, examples, and checks are in `demo/`. Submitted files remain in `report/`
+and `presentation/`; the saved experiment exports are in `results/`.
+
 ## Notebooks
 
 | Notebook | What it does |
