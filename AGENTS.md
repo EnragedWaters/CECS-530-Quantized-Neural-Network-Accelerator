@@ -10,6 +10,8 @@ explains that work with actual calculations and the same timing assumptions.
   together; `launch_demo.py` resolves the repo from its own file location.
 - `demo/`: local Python server, checked arithmetic/scheduler, browser UI, bundled
   model/examples, tests, and the detailed demo guide. No CDN or Node runtime.
+  `learning.js` handles navigation; `lessons.js` contains the six presentation
+  stops and optional explanations. `explore.html` keeps full controls separate.
 - `notebooks/`: independently runnable notebooks 02–06; retain that independence.
 - `results/`: the two published experiment exports used by the report and graphs.
 - `report/` and `presentation/`: submitted deliverables and speaking guide.
@@ -48,3 +50,17 @@ For native Windows VS Code with WSL execution, user-facing clickable links use
 `/C:/Users/...`, preserving the actual path spelling. Shell commands still use
 `/mnt/c/...`. A Remote WSL/Linux editor uses Linux paths instead. Prefer Markdown
 companions for report/slide links; do not assume the editor opens binary documents.
+
+## Visual learning interface
+
+The demo supplements the existing PowerPoint. Keep the default path to six short
+stops; deeper arithmetic explanations belong in Steps → Extra explanations, and
+custom settings/gallery/sweeps belong in Explore. Each action reveals one clear
+change, followed by its explanation. Keep the instruction, visual, result and next
+action together at laptop size. Reveal predictions only at the largest-score step.
+
+Inspection fields come from the already-checked simulation, not recreated browser
+arithmetic. Selected terms must be labeled as a subset of the full dot product.
+Run browser checks with `headless=True` (the default), background servers, and no
+`--open`. Do not open foreground windows or change the user's focused tab. Do not
+turn this slide companion into a lecture or modify submitted slides to add it.

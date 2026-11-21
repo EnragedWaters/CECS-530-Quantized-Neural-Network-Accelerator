@@ -129,7 +129,7 @@ async function go(next) {
     busy = false;
   }
   render();
-  window.scrollTo({ top: 0, behavior: "instant" });
+  window.scrollTo({ top: 0, behavior: "auto" });
   focusAction();
 }
 async function act() {

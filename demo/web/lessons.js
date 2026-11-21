@@ -462,7 +462,7 @@ const followDigit = {
     [
       "Press “Inspect this pixel” to see how an image becomes numerical inputs. The network has already been trained.",
       "Press “Show the first-layer calculation” to inspect one of the 64 totals produced from 784 inputs.",
-      "Press “Prepare the hidden values” to see bias addition, ReLU and rescaling for one total. Extra explanations are available in “Steps”.",
+      "Press “Prepare the hidden values” to add a learned offset, replace negative values with zero, and convert the result for the next layer.",
       "Press “Show the ten scores” to see the second layer combine 64 hidden values into ten digit scores.",
       "Press “Highlight the largest score” to reveal the predicted digit. Scores are not probabilities.",
     ][step],
