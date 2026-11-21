@@ -50,3 +50,26 @@ def predict_example(example_id,config,bundle):
             'fp32':{'prediction':int(scores_fp.argmax(1)[0]),'hidden':hidden_fp[0].tolist(),'scores':scores_fp[0].tolist(),'metrics':stage_summary([fp1,fp2])},
             'int8':{'prediction':int(scores_int.argmax(1)[0]),'hidden':hidden_int[0].tolist(),'hidden_display':(hidden_int.astype(np.float64)*settings['activation_scale'])[0].tolist(),'scores':scores_int[0].tolist(),'scores_display':display_scores[0].tolist(),'clipped':clipped,'metrics':stage_summary([int1,int2])},
             'verification':{'integer_exact':int_ok,'fp32_within_tolerance':fp_ok},'quantization':settings}
+
+# Timing sweeps use fixed dimensions and no zero-skipping. Cache identical
+# configurations so changing only the clock never repeats matrix work.
+from functools import lru_cache
+from dataclasses import replace
+
+@lru_cache(maxsize=256)
+def dimension_metrics(config,precision):
+    runs=[core.simulate_matmul([[0]*inner],[[0]*columns for _ in range(inner)],config,precision=precision,record_trace=False) for inner,columns in ((784,64),(64,10))]
+    return stage_summary(runs)
+
+def hardware_experiment(config,clock_hz):
+    def measure(machine,precision):
+        try:
+            metrics=dict(dimension_metrics(machine,precision))
+            metrics.update(latency_us=metrics['total_cycles']/clock_hz*1e6,stage_images_per_second=clock_hz/metrics['total_cycles'])
+            return metrics
+        except ValueError as error:return {'error':str(error)}
+    results={p:measure(config,p) for p in ('fp32','int8')}
+    speedup=None if any('error' in r for r in results.values()) else results['fp32']['total_cycles']/results['int8']['total_cycles']
+    lane_rows=[{'value':n,**{p:measure(replace(config,lanes=n),p) for p in ('fp32','int8')}} for n in (4,8,16,32)]
+    bandwidth_rows=[{'value':n,**{p:measure(replace(config,lanes=32,external_bytes_per_cycle=n),p) for p in ('fp32','int8')}} for n in (8,16,32,64,128)]
+    return {'clock_hz':clock_hz,'results':results,'speedup':speedup,'lane_sweep':lane_rows,'external_sweep':bandwidth_rows,'bandwidth_sweep_lanes':32,'local_supply':{'fp32':config.local_read_bytes_per_cycle//8,'int8':config.local_read_bytes_per_cycle//2}}

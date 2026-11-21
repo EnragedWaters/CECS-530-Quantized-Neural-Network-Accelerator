@@ -49,6 +49,14 @@ def inference_request(data):
     from .experiment import predict_example
     return predict_example(data.get('example_id',0),configuration(data.get('config',{})),bundle())
 
+def hardware_request(data):
+    if set(data)-{'config','clock_hz'}:raise ValueError('Unknown hardware experiment setting.')
+    clock=data.get('clock_hz',100_000_000)
+    if type(clock) is not int or not 10_000_000<=clock<=500_000_000:raise ValueError('Choose a clock from 10 to 500 MHz.')
+    from .experiment import hardware_experiment
+    machine=configuration(data.get('config',{}))
+    return hardware_experiment(machine,clock)|{'config':asdict(machine)}
+
 @lru_cache(maxsize=1)
 def bundle():return load_bundle()
 
@@ -68,7 +76,7 @@ class Handler(BaseHTTPRequestHandler):
         if path not in files:self.send(404,{'error':'Page not found.'});return
         filename,mime=files[path];self.send(200,(WEB/filename).read_bytes(),mime)
     def do_POST(self):
-        routes={'/api/simulate':toy_run,'/api/quantize':quantization_example,'/api/infer':inference_request}
+        routes={'/api/simulate':toy_run,'/api/quantize':quantization_example,'/api/infer':inference_request,'/api/hardware':hardware_request}
         route=routes.get(urlsplit(self.path).path)
         if route is None:self.send(404,{'error':'Calculation not found.'});return
         try:

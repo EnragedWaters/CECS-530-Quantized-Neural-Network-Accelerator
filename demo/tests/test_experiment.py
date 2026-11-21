@@ -24,3 +24,28 @@ class ExperimentTests(unittest.TestCase):
         with self.assertRaises(ValueError):predict_example(-1,AcceleratorConfig(),self.bundle)
 
 if __name__=='__main__':unittest.main()
+
+class HardwareTests(unittest.TestCase):
+    def test_baseline_and_sweeps_match_archived_cycles(self):
+        import json
+        from pathlib import Path
+        from demo.experiment import hardware_experiment
+        saved=json.loads((Path(__file__).resolve().parents[2]/'results/accelerator-results.json').read_text())
+        r=hardware_experiment(AcceleratorConfig(8,262144,32,32),100_000_000)
+        self.assertAlmostEqual(r['speedup'],19204/8025)
+        for actual,expected in zip(r['lane_sweep'],saved['lane_sweep']):
+            for p in ('fp32','int8'):self.assertEqual(actual[p]['total_cycles'],expected[p+'_cycles'])
+        for actual,expected in zip(r['external_sweep'],saved['external_bandwidth_sweep']):
+            for p in ('fp32','int8'):self.assertEqual(actual[p]['total_cycles'],expected[p+'_cycles'])
+    def test_clock_changes_time_not_cycles(self):
+        from demo.experiment import hardware_experiment
+        a=hardware_experiment(AcceleratorConfig(8,262144,32,32),100_000_000)
+        b=hardware_experiment(AcceleratorConfig(8,262144,32,32),200_000_000)
+        self.assertEqual(a['results']['int8']['total_cycles'],b['results']['int8']['total_cycles'])
+        self.assertEqual(a['results']['int8']['latency_us']/2,b['results']['int8']['latency_us'])
+    def test_invalid_format_does_not_become_zero_cycles(self):
+        from demo.experiment import hardware_experiment
+        r=hardware_experiment(AcceleratorConfig(8,65536,32,32),100_000_000)
+        self.assertIn('error',r['results']['fp32']);self.assertNotIn('error',r['results']['int8']);self.assertIsNone(r['speedup'])
+        r=hardware_experiment(AcceleratorConfig(8,262144,2,32),100_000_000)
+        self.assertIn('error',r['results']['fp32']);self.assertNotIn('error',r['results']['int8'])
