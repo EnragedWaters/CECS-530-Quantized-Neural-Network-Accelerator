@@ -61,6 +61,21 @@ def check(url, screenshots=None):
         page.locator("#lesson-action").click()
         page.locator("#lesson-action").click()
         expect(page.locator("#lesson-result")).to_contain_text("16,129")
+        page.locator("#lesson-action").click()
+        for cycle in range(1, 7):
+            expect(page.locator("#lesson-action")).to_have_text("Next clock cycle")
+            page.locator("#lesson-action").click()
+            expect(page.locator(".cycle-state")).to_contain_text(
+                f"Clock cycle {cycle} of 6"
+            )
+        expect(page.locator("#lesson-result")).to_contain_text("answer is 29")
+        page.locator("#lesson-action").click()
+        page.locator("#lesson-action").click()
+        expect(page.locator(".learning-lane.working")).to_have_count(8)
+        page.locator("#lesson-action").click()
+        page.locator("#lesson-action").click()
+        expect(page.locator(".learning-lane.working")).to_have_count(4)
+        expect(page.locator(".learning-lane.waiting")).to_have_count(4)
         page.locator("#choose-lesson").click()
         page.locator("#lesson-list button").nth(0).click()
         page.locator("#explore-toggle").click()

@@ -80,3 +80,107 @@ lessons.push(
       `What changed: the product is ${fmt(data.large_product, 0)}, far above 127. Our accelerator keeps the running total in INT32 to avoid INT8 overflow.`,
   },
 );
+
+const computeEvents = (data) => data.trace.filter((e) => e.phase === "compute");
+function machine(data, event, cycle) {
+  if (!data) return ready(data);
+  const phase = event?.phase || "ready";
+  const names = {
+    ready: "Ready to load",
+    load_inputs: "Load inputs",
+    load_weights: "Load weights",
+    compute: "Multiply and add",
+    store_outputs: "Store the answer",
+  };
+  const ops = event?.macs || [];
+  const lanes = Array.from({ length: data.config.lanes }, (_, i) => {
+    const op = ops.find((o) => o.lane === i),
+      waiting = event?.waiting_lanes?.includes(i),
+      unused = event?.unused_lanes?.includes(i);
+    const status = op
+      ? "Working"
+      : waiting
+        ? "Waiting"
+        : unused
+          ? "Unassigned"
+          : phase === "store_outputs"
+            ? "Stored"
+            : "Ready";
+    return `<div class="learning-lane ${op ? "working" : waiting ? "waiting" : ""}"><b>Lane ${i + 1}</b><strong>${op ? op.accumulator : phase === "store_outputs" ? data.output[0][i] : "—"}</strong><span>${status}</span></div>`;
+  }).join("");
+  return `<div class="machine-route"><div class="${phase.startsWith("load") || phase === "store_outputs" ? "current" : ""}"><b>External memory</b><span>inputs and weights</span></div><span class="arrow">⇄</span><div class="${phase === "compute" ? "current" : ""}"><b>Local buffer</b><span>nearby stored values</span></div><span class="arrow">→</span><div><b>Processing lanes</b><span>multiply-add workers</span></div></div><p class="cycle-state"><b>${names[phase]}</b><span>Clock cycle ${cycle} of ${data.metrics.total_cycles}</span></p><div class="learning-lanes" style="--count:${Math.min(data.config.lanes, 8)}">${lanes}</div>`;
+}
+lessons.push(
+  {
+    id: "cycles",
+    chapter: "Inside the accelerator",
+    title: "Where do the six clock cycles go?",
+    steps: 6,
+    instruction:
+      "Press “Next clock cycle” to load inputs, load weights, calculate three products, then store the answer.",
+    button: "Next clock cycle",
+    load: (api) => api("/api/simulate", { config: { lanes: 1 } }),
+    act: () => undefined,
+    render: ({ step, data }) => machine(data, data?.trace[step - 1], step),
+    explain: ({ step, data }) => {
+      const e = data.trace[step - 1];
+      if (e.phase === "compute") {
+        const o = e.macs[0];
+        return `What changed: ${o.accumulator_before} + (${o.left} × ${o.right}) = ${o.accumulator}. This clock cycle performed one multiply-add.`;
+      }
+      return `What changed: ${e.bytes} bytes ${e.phase === "store_outputs" ? "stored back to memory. The answer is " + data.output[0][0] + "." : "loaded into the local buffer."} Data movement also uses clock cycles.`;
+    },
+  },
+  {
+    id: "parallel",
+    chapter: "Inside the accelerator",
+    title: "How do eight lanes work together?",
+    steps: 1,
+    instruction:
+      "Press “Run eight lanes” to calculate eight independent answers in parallel. Each lane owns one answer.",
+    button: "Run eight lanes",
+    load: (api) =>
+      api("/api/simulate", { preset: "parallel", config: { lanes: 8 } }),
+    act: () => undefined,
+    render: ({ step, data }) =>
+      machine(
+        data,
+        step ? computeEvents(data)[0] : null,
+        step ? data.trace.indexOf(computeEvents(data)[0]) + 1 : 0,
+      ),
+    explain: ({ data }) =>
+      `What changed: ${computeEvents(data)[0].macs.length} lanes performed a multiply-add in the same clock cycle. Each has its own running total.`,
+  },
+  {
+    id: "waiting",
+    chapter: "Inside the accelerator",
+    title: "What if memory cannot feed every lane?",
+    steps: 1,
+    instruction:
+      "Press “Narrow the local connection” to reduce local reads from 32 to 8 bytes per clock cycle. Watch the lane status labels.",
+    button: "Narrow the local connection",
+    load: async (api) => ({
+      before: await api("/api/simulate", {
+        preset: "parallel",
+        config: { lanes: 8 },
+      }),
+    }),
+    act: async (e, api) => ({
+      ...e.data,
+      after: await api("/api/simulate", {
+        preset: "parallel",
+        config: { lanes: 8, local_read_bytes_per_cycle: 8 },
+      }),
+    }),
+    render: ({ step, data }) => {
+      if (!data) return ready(data);
+      const r = step ? data.after : data.before,
+        e = computeEvents(r)[0];
+      return machine(r, e, r.trace.indexOf(e) + 1);
+    },
+    explain: ({ data }) => {
+      const e = computeEvents(data.after)[0];
+      return `What changed: ${e.macs.length} lanes work; ${e.waiting_lanes.length} wait for data. The connection supplies only four INT8 operand pairs per clock cycle. Waiting lanes still have assigned work.`;
+    },
+  },
+);
