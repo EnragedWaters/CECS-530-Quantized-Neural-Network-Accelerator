@@ -6,7 +6,7 @@ numbers, proposed hardware, digit predictions, and memory limits in one place.
 **[Start with the launchers](../ONE-CLICK-LAUNCHERS/README.md).** They handle setup
 and open a local browser page on Windows, macOS, Linux, or WSL.
 
-![Four lanes working and four waiting for data](images/accelerator.png)
+![FP32 and INT8 lanes compared at the same local bandwidth](images/accelerator.png)
 
 ## Use alongside the PowerPoint
 
@@ -18,10 +18,16 @@ revisits a stop, and **Replay step** starts its actions again.
 |---|---|---|
 | 1 · Smaller numbers | **Convert 1.23** | Rounding stores 12 at scale 0.1 and reconstructs 1.2. |
 | 2 · Clock cycles | **Next clock cycle**, six times | Load inputs, load weights, three multiply-adds, and store 29. |
-| 3 · Working/waiting lanes | **Run eight lanes**, then **Narrow the local connection** | Four lanes wait when local reads cannot feed all eight. |
+| 3 · Same bandwidth, smaller operands | **Run FP32**, then **Switch to INT8** | At the same 32 bytes/cycle, four FP32 lanes or all eight INT8 lanes receive their operands. |
 | 4 · One real image | **Inspect this pixel** → **Show the first-layer calculation** → **Prepare the hidden values** → **Show the ten scores** → **Highlight the largest score** | Follow the trained network before revealing its prediction. |
 | 5 · Performance | **Compare FP32 and INT8** | Matched matrix-stage cycles and their compute/transfer breakdown. |
 | 6 · Memory fit | **Use a 64 KiB buffer** | INT8 fits; FP32 does not fit this untiled model. |
+
+Stop 3 holds the calculation, eight physical lanes, and all hardware settings fixed.
+Only the operand format changes: At our baseline 32 bytes/cycle, FP32 needs 4 + 4 bytes per multiply-add; INT8 needs
+1 + 1. The two rows are separate runs of the same machine. More INT8 lanes can work
+per compute cycle because their operands use fewer bytes. Custom bandwidth changes
+remain available in Explore and the optional waiting-lanes explanation.
 
 Use **Steps** to jump to a topic when it supports the current slide. For a short
 presentation insert, use stop 2 with slide 7 (six clock cycles) and stop 3 with
@@ -117,7 +123,7 @@ With their default local server, backend connections are restricted to loopback 
 `--url http://127.0.0.1:PORT` checks an existing server; `--screenshots PATH` saves
 actual browser captures. These tools are not required for presenting.
 
-Verification on November 20, 2026: the redesigned app passes 27 calculation,
+Verification on November 20, 2026: the redesigned app passes 28 calculation,
 asset, HTTP and launcher checks on Linux/WSL Python 3.12. Headless Chromium checks
 cover every presentation action, optional explanation, error recovery, keyboard
 navigation, Explore/return, laptop/projector/mobile layouts and enlarged content.

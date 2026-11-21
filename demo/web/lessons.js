@@ -82,16 +82,7 @@ lessons.push(
 );
 
 const computeEvents = (data) => data.trace.filter((e) => e.phase === "compute");
-function machine(data, event, cycle) {
-  if (!data) return ready(data);
-  const phase = event?.phase || "ready";
-  const names = {
-    ready: "Ready to load",
-    load_inputs: "Load inputs",
-    load_weights: "Load weights",
-    compute: "Multiply and add",
-    store_outputs: "Store the answer",
-  };
+function laneGrid(data, event, phase = "ready", showTotals = true) {
   const ops = event?.macs || [];
   const lanes = Array.from({ length: data.config.lanes }, (_, i) => {
     const op = ops.find((o) => o.lane === i),
@@ -106,9 +97,21 @@ function machine(data, event, cycle) {
           : phase === "store_outputs"
             ? "Stored"
             : "Ready";
-    return `<div class="learning-lane ${op ? "working" : waiting ? "waiting" : ""}"><b>Lane ${i + 1}</b><strong>${op ? op.accumulator : phase === "store_outputs" ? data.output[0][i] : "—"}</strong><span>${status}</span></div>`;
+    return `<div class="learning-lane ${op ? "working" : waiting ? "waiting" : ""}"><b>Lane ${i + 1}</b>${showTotals ? `<strong>${op ? op.accumulator : phase === "store_outputs" ? data.output[0][i] : "—"}</strong>` : ""}<span>${status}</span></div>`;
   }).join("");
-  return `<div class="machine-route"><div class="${phase.startsWith("load") || phase === "store_outputs" ? "current" : ""}"><b>External memory</b><span>inputs and weights</span></div><span class="arrow">⇄</span><div class="${phase === "compute" ? "current" : ""}"><b>Local buffer</b><span>nearby stored values</span></div><span class="arrow">→</span><div><b>Processing lanes</b><span>multiply-add workers</span></div></div><p class="cycle-state"><b>${names[phase]}</b><span>Clock cycle ${cycle} of ${data.metrics.total_cycles}</span></p><div class="learning-lanes" style="--count:${Math.min(data.config.lanes, 8)}">${lanes}</div>`;
+  return `<div class="learning-lanes" style="--count:${Math.min(data.config.lanes, 8)}">${lanes}</div>`;
+}
+function machine(data, event, cycle) {
+  if (!data) return ready(data);
+  const phase = event?.phase || "ready";
+  const names = {
+    ready: "Ready to load",
+    load_inputs: "Load inputs",
+    load_weights: "Load weights",
+    compute: "Multiply and add",
+    store_outputs: "Store the answer",
+  };
+  return `<div class="machine-route"><div class="${phase.startsWith("load") || phase === "store_outputs" ? "current" : ""}"><b>External memory</b><span>inputs and weights</span></div><span class="arrow">⇄</span><div class="${phase === "compute" ? "current" : ""}"><b>Local buffer</b><span>nearby stored values</span></div><span class="arrow">→</span><div><b>Processing lanes</b><span>multiply-add workers</span></div></div><p class="cycle-state"><b>${names[phase]}</b><span>Clock cycle ${cycle} of ${data.metrics.total_cycles}</span></p>${laneGrid(data, event, phase)}`;
 }
 lessons.push(
   {
@@ -154,10 +157,10 @@ lessons.push(
   {
     id: "waiting",
     chapter: "Inside the accelerator",
-    title: "What if memory cannot feed every lane?",
+    title: "What if INT8 gets less bandwidth?",
     steps: 1,
     instruction:
-      "Press “Narrow the local connection” to reduce local reads from 32 to 8 bytes per clock cycle. Watch the lane status labels.",
+      "Press “Narrow the local connection” to reduce local reads from 32 to 8 bytes per cycle. This optional experiment keeps INT8 fixed.",
     button: "Narrow the local connection",
     load: async (api) => ({
       before: await api("/api/simulate", {
@@ -180,7 +183,7 @@ lessons.push(
     },
     explain: ({ data }) => {
       const e = computeEvents(data.after)[0];
-      return `What changed: ${e.macs.length} lanes work; ${e.waiting_lanes.length} wait for data. The connection supplies only four INT8 operand pairs per clock cycle. Waiting lanes still have assigned work.`;
+      return `What changed: INT8 stayed fixed; only bandwidth decreased. Now ${e.macs.length} lanes work and ${e.waiting_lanes.length} wait for data. This is a separate bandwidth experiment.`;
     },
   },
 );
@@ -426,32 +429,50 @@ lessons.push(
 // The main route supplements the slides; the longer explanations are optional.
 const detailed = lessons.slice();
 const byId = Object.fromEntries(detailed.map((l) => [l.id, l]));
-const parallelAndWaiting = {
+function formatLanes(run, active) {
+  const event = active ? computeEvents(run)[0] : null;
+  const pairBytes = run.metrics.local_operand_bytes_read / run.metrics.macs;
+  return `<section class="format-lanes" data-format="${run.precision}" aria-label="${run.precision.toUpperCase()} lane comparison"><div class="format-heading"><b class="${run.precision === "fp32" ? "fp" : "int"}">${run.precision.toUpperCase()} · ${pairBytes / 2} + ${pairBytes / 2} = ${pairBytes} bytes per multiply-add</b><span>${event ? `${event.macs.length} working · ${event.waiting_lanes.length} waiting` : "Ready"}</span></div>${laneGrid(run, event, "compute", false)}</section>`;
+}
+const precisionLaneComparison = {
   id: "lanes",
-  chapter: "Watch the machine",
-  title: "Do more lanes always help?",
+  chapter: "Same bandwidth, smaller operands",
+  title: "Why can INT8 feed more lanes?",
   steps: 2,
   instruction: ({ step }) =>
     step
-      ? "Press “Narrow the local connection” to reduce local reads to 8 bytes per clock cycle. Watch which lanes wait."
-      : "Press “Run eight lanes” to give eight lanes independent answers. Each lane performs a multiply-add.",
-  button: ({ step }) =>
-    step ? "Narrow the local connection" : "Run eight lanes",
-  load: byId.waiting.load,
-  act: (e, api) => (e.step ? byId.waiting.act(e, api) : undefined),
-  render: ({ step, data }) => {
-    if (!data) return ready(data);
-    const r = step === 2 ? data.after : data.before;
-    return machine(
-      r,
-      step ? computeEvents(r)[0] : null,
-      step ? r.trace.indexOf(computeEvents(r)[0]) + 1 : 0,
-    );
+      ? "Press “Switch to INT8”. Keep the same eight lanes and the same 32-byte connection; only the operand format changes."
+      : "Press “Run FP32” to see how many lanes the local connection can feed in one compute cycle. The connection supplies 32 bytes per cycle.",
+  button: ({ step }) => (step ? "Switch to INT8" : "Run FP32"),
+  load: async (api) => ({
+    fp32: await api("/api/simulate", {
+      preset: "parallel",
+      precision: "fp32",
+      config: { lanes: 8, local_read_bytes_per_cycle: 32 },
+    }),
+  }),
+  act: async (entry, api) =>
+    entry.step
+      ? {
+          ...entry.data,
+          int8: await api("/api/simulate", {
+            preset: "parallel",
+            precision: "int8",
+            config: { ...entry.data.fp32.config },
+          }),
+        }
+      : undefined,
+  render: ({ step, data }) =>
+    !data
+      ? ready(data)
+      : `<p class="fixed-hardware"><b>Fixed hardware:</b> ${data.fp32.config.lanes} lanes · local connection ${data.fp32.config.local_read_bytes_per_cycle} bytes per clock cycle</p>${formatLanes(data.fp32, step > 0)}${step === 2 ? formatLanes(data.int8, true) : ""}<p class="caption">Separate runs of the same eight-lane machine. Working lanes receive operands; waiting lanes need data.</p>`,
+  explain: ({ step, data }) => {
+    const fp = computeEvents(data.fp32)[0];
+    if (step === 1)
+      return `What changed: FP32 needs 8 bytes for two operands. At 32 bytes per cycle, ${fp.macs.length} lanes work and ${fp.waiting_lanes.length} wait. Next, keep the connection fixed and switch to INT8.`;
+    const integer = computeEvents(data.int8)[0];
+    return `What changed: the same connection feeds ${fp.macs.length} FP32 lanes or ${integer.macs.length} INT8 lanes per cycle. Smaller INT8 operands let all eight lanes work without increasing bandwidth.`;
   },
-  explain: (e) =>
-    e.step === 2
-      ? byId.waiting.explain(e)
-      : byId.parallel.explain({ data: e.data.before }),
 };
 const followDigit = {
   id: "digit",
@@ -502,7 +523,7 @@ lessons.splice(
   lessons.length,
   byId.rounding,
   byId.cycles,
-  parallelAndWaiting,
+  precisionLaneComparison,
   followDigit,
   byId.performance,
   byId.capacity,

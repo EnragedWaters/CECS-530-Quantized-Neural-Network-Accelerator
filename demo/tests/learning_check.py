@@ -46,12 +46,28 @@ def check_learning(page, url, screenshots):
                     f"Clock cycle {action+1} of 6"
                 )
             if index == 2:
-                expect(page.locator(".learning-lane.working")).to_have_count(
-                    8 if action == 0 else 4
+                expect(page.locator(".fixed-hardware")).to_contain_text(
+                    "8 lanes · local connection 32 bytes per clock cycle"
                 )
-                expect(page.locator(".learning-lane.waiting")).to_have_count(
-                    0 if action == 0 else 4
-                )
+                fp = page.locator('[data-format="fp32"]')
+                expect(fp.locator(".learning-lane")).to_have_count(8)
+                expect(fp.locator(".learning-lane.working")).to_have_count(4)
+                expect(fp.locator(".learning-lane.waiting")).to_have_count(4)
+                expect(fp).to_contain_text("4 + 4 = 8 bytes")
+                if action == 0:
+                    expect(page.locator("#lesson-action")).to_have_text(
+                        "Switch to INT8"
+                    )
+                    expect(page.locator('[data-format="int8"]')).to_have_count(0)
+                else:
+                    integer = page.locator('[data-format="int8"]')
+                    expect(integer.locator(".learning-lane")).to_have_count(8)
+                    expect(integer.locator(".learning-lane.working")).to_have_count(8)
+                    expect(integer.locator(".learning-lane.waiting")).to_have_count(0)
+                    expect(integer).to_contain_text("1 + 1 = 2 bytes")
+                    expect(page.locator("#lesson-result")).to_contain_text(
+                        "without increasing bandwidth"
+                    )
             if index == 3 and action == 1:
                 expect(page.locator(".dot-inspection")).to_contain_text(
                     "3 of 784 terms"

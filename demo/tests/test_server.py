@@ -40,6 +40,38 @@ class ServerTests(unittest.TestCase):
         self.assertEqual(r["output"], [[29]])
         self.assertEqual(r["metrics"]["total_cycles"], 6)
 
+    def test_precision_comparison_keeps_hardware_and_workload_fixed(self):
+        runs = {}
+        for precision in ("fp32", "int8"):
+            with self.post(
+                "/api/simulate",
+                json.dumps(
+                    {
+                        "preset": "parallel",
+                        "precision": precision,
+                        "config": {"lanes": 8, "local_read_bytes_per_cycle": 32},
+                    }
+                ),
+            ) as response:
+                runs[precision] = json.load(response)
+        self.assertEqual(runs["fp32"]["config"], runs["int8"]["config"])
+        self.assertEqual(runs["fp32"]["left"], runs["int8"]["left"])
+        self.assertEqual(runs["fp32"]["right"], runs["int8"]["right"])
+        self.assertEqual(runs["fp32"]["output"], runs["int8"]["output"])
+        self.assertEqual(runs["int8"]["output"], [[29] * 8])
+        for precision, active, waiting, pair_bytes in [
+            ("fp32", 4, 4, 8),
+            ("int8", 8, 0, 2),
+        ]:
+            run = runs[precision]
+            event = next(e for e in run["trace"] if e["phase"] == "compute")
+            self.assertEqual(len(event["macs"]), active)
+            self.assertEqual(len(event["waiting_lanes"]), waiting)
+            self.assertEqual(
+                run["metrics"]["local_operand_bytes_read"] // run["metrics"]["macs"],
+                pair_bytes,
+            )
+
     def test_quantization_clipping_and_integer_units(self):
         with self.post(
             "/api/quantize", json.dumps({"value": 200, "scale": 1})

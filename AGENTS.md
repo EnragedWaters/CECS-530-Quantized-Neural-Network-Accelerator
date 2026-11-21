@@ -58,6 +58,9 @@ stops; deeper arithmetic explanations belong in Steps → Extra explanations, an
 custom settings/gallery/sweeps belong in Explore. Each action reveals one clear
 change, followed by its explanation. Keep the instruction, visual, result and next
 action together at laptop size. Reveal predictions only at the largest-score step.
+The main lane comparison holds eight lanes and the baseline 32-byte/cycle local
+connection fixed: FP32 feeds four lanes, INT8 feeds all eight. Bandwidth changes
+belong to the separately labeled optional experiment.
 
 Inspection fields come from the already-checked simulation, not recreated browser
 arithmetic. Selected terms must be labeled as a subset of the full dot product.
