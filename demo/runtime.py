@@ -62,6 +62,7 @@ def checked_mac(accumulator, left, right):
     return result
 
 
+@dataclass(frozen=True)
 class AcceleratorConfig:
     lanes: int = 4
     scratchpad_bytes: int = 4096
@@ -76,6 +77,7 @@ class AcceleratorConfig:
             raise ValueError("The local read bus must support at least one INT8 operand pair.")
 
 
+@dataclass
 class SimulationResult:
     output: list[list[int | float]]
     config: AcceleratorConfig
