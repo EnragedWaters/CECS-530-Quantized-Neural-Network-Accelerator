@@ -49,6 +49,20 @@ def check(url, screenshots=None):
         ), "Lesson requires scrolling"
         if screenshots:
             page.screenshot(path=str(screenshots / "first-learning-lesson.png"))
+        page.locator("#lesson-action").click()
+        expect(page.locator("#lesson-action")).to_have_text("Try 200")
+        page.locator("#lesson-action").click()
+        expect(page.locator("#lesson-result")).to_contain_text("clipped to 127")
+        page.locator("#lesson-action").click()
+        for total in [8, 23, 29]:
+            expect(page.locator("#lesson-action")).to_have_text("Add the next product")
+            page.locator("#lesson-action").click()
+            expect(page.locator(".running-total strong")).to_have_text(str(total))
+        page.locator("#lesson-action").click()
+        page.locator("#lesson-action").click()
+        expect(page.locator("#lesson-result")).to_contain_text("16,129")
+        page.locator("#choose-lesson").click()
+        page.locator("#lesson-list button").nth(0).click()
         page.locator("#explore-toggle").click()
         expect(
             page.frame_locator("#explore-frame").locator("#toy-stage")
