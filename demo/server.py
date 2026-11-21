@@ -44,6 +44,11 @@ def quantization_example(data):
     hidden,_=requantize_relu_integer(np.array([20+bias],dtype=np.int32),1,2)
     return {'value':value,'scale':scale,'scaled':float(np.float32(value)/scale),'stored':stored,'reconstructed':reconstructed,'error':abs(value-reconstructed),'clipped':value/scale>127 or value/scale< -127,'large_product':checked_mac(0,127,127),'bias':bias,'biased_total':20+bias,'rescaled':int(hidden[0])}
 
+def inference_request(data):
+    if set(data)-{'example_id','config'}:raise ValueError('Unknown prediction setting.')
+    from .experiment import predict_example
+    return predict_example(data.get('example_id',0),configuration(data.get('config',{})),bundle())
+
 @lru_cache(maxsize=1)
 def bundle():return load_bundle()
 
@@ -63,7 +68,7 @@ class Handler(BaseHTTPRequestHandler):
         if path not in files:self.send(404,{'error':'Page not found.'});return
         filename,mime=files[path];self.send(200,(WEB/filename).read_bytes(),mime)
     def do_POST(self):
-        routes={'/api/simulate':toy_run,'/api/quantize':quantization_example}
+        routes={'/api/simulate':toy_run,'/api/quantize':quantization_example,'/api/infer':inference_request}
         route=routes.get(urlsplit(self.path).path)
         if route is None:self.send(404,{'error':'Calculation not found.'});return
         try:
