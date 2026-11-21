@@ -332,7 +332,7 @@ lessons.push(
     render: ({ step, data }) =>
       !data ? ready(data) : pipeline(4) + scoreChart(data, !!step),
     explain: ({ data }) =>
-      `What changed: the largest raw score chooses FP32 ${data.fp32.prediction} and INT8 ${data.int8.prediction}. Independent arithmetic checks pass for both calculations.`,
+      `What changed: the largest raw scores choose FP32 ${data.fp32.prediction} and INT8 ${data.int8.prediction}. Both arithmetic checks pass.`,
   },
   {
     id: "disagreement",
@@ -357,3 +357,160 @@ lessons.push(
       `What changed: FP32 predicts ${data.fp32.prediction}; INT8 predicts ${data.int8.prediction}. Fifteen of the original 10,000 test predictions differed; this is one of them.`,
   },
 );
+
+function timeBars(data) {
+  const max = Math.max(
+    ...Object.values(data.results).map((r) => r.total_cycles),
+  );
+  return `<div class="comparison-bars">${["fp32", "int8"]
+    .map((p) => {
+      const r = data.results[p];
+      return `<div class="comparison-row"><b class="${p === "fp32" ? "fp" : "int"}">${p.toUpperCase()}</b><div class="stack-track"><span class="${p === "fp32" ? "fp-fill" : "int-fill"}" style="width:${(100 * r.compute_cycles) / max}%"></span><span class="transfer-fill" style="width:${(100 * r.transfer_cycles) / max}%"></span></div><strong>${fmt(r.total_cycles, 0)} cycles</strong></div>`;
+    })
+    .join(
+      "",
+    )}</div><p class="caption">Colored segment: calculate · Pale segment: external transfers</p><p class="speed-result">${fmt(data.speedup, 3)}× matrix-stage speedup</p><p class="caption">Estimated matrix stages, including transfers · same workload and hardware assumptions</p>`;
+}
+function memoryBars(data, small) {
+  const r = small ? data.after : data.before,
+    capacity = r.config.scratchpad_bytes,
+    max = Math.max(capacity, data.before.results.fp32.resident_bytes);
+  return `<div class="memory-comparison">${["fp32", "int8"]
+    .map((p) => {
+      const need = data.before.results[p].resident_bytes,
+        fits = !r.results[p].error;
+      return `<div class="memory-example"><div><b class="${p === "fp32" ? "fp" : "int"}">${p.toUpperCase()} · ${fmt(need / 1024, 2)} KiB needed</b><strong>${fits ? "Fits" : "Does not fit"}</strong></div><div class="memory-rail"><i class="${p === "fp32" ? "fp-fill" : "int-fill"}" style="width:${(100 * need) / max}%"></i><b style="left:${(100 * capacity) / max}%"></b></div></div>`;
+    })
+    .join(
+      "",
+    )}</div><p class="caption">Vertical marker: ${capacity / 1024} KiB buffer capacity · whole layer must fit</p>`;
+}
+lessons.push(
+  {
+    id: "performance",
+    chapter: "Compare the results",
+    title: "What does our timing model estimate?",
+    steps: 1,
+    instruction:
+      "Press “Compare FP32 and INT8” to run the same workload under matching hardware settings. Look at calculation and transfer cycles.",
+    button: "Compare FP32 and INT8",
+    act: (_, api) => cached(api, "/api/hardware", {}),
+    render: ({ step, data }) =>
+      step
+        ? timeBars(data)
+        : '<p class="visual-prompt">Same image · eight lanes · matching memory connections</p><p class="caption">Compare two numerical formats with the same proposed machine.</p>',
+    explain: ({ data }) =>
+      `What changed: INT8 needs ${fmt(data.results.int8.total_cycles, 0)} cycles instead of ${fmt(data.results.fp32.total_cycles, 0)}. The estimate covers matrix work and transfers, not complete inference.`,
+  },
+  {
+    id: "capacity",
+    chapter: "Compare the results",
+    title: "What if the local buffer is smaller?",
+    steps: 1,
+    instruction:
+      "Press “Use a 64 KiB buffer”. The workload stays the same; only the amount of local storage changes.",
+    button: "Use a 64 KiB buffer",
+    load: async (api) => ({ before: await cached(api, "/api/hardware", {}) }),
+    act: async (e, api) => ({
+      ...e.data,
+      after: await cached(api, "/api/hardware", {
+        config: { scratchpad_bytes: 65536 },
+      }),
+    }),
+    render: ({ step, data }) => (data ? memoryBars(data, !!step) : ready(data)),
+    explain: () =>
+      `What changed: INT8 fits in 64 KiB; FP32 does not. Our model has no tiling, so that FP32 configuration is unavailable. Capacity is different from bandwidth.`,
+  },
+);
+
+// The main route supplements the slides; the longer explanations are optional.
+const detailed = lessons.slice();
+const byId = Object.fromEntries(detailed.map((l) => [l.id, l]));
+const parallelAndWaiting = {
+  id: "lanes",
+  chapter: "Watch the machine",
+  title: "Do more lanes always help?",
+  steps: 2,
+  instruction: ({ step }) =>
+    step
+      ? "Press “Narrow the local connection” to reduce local reads to 8 bytes per clock cycle. Watch which lanes wait."
+      : "Press “Run eight lanes” to give eight lanes independent answers. Each lane performs a multiply-add.",
+  button: ({ step }) =>
+    step ? "Narrow the local connection" : "Run eight lanes",
+  load: byId.waiting.load,
+  act: (e, api) => (e.step ? byId.waiting.act(e, api) : undefined),
+  render: ({ step, data }) => {
+    if (!data) return ready(data);
+    const r = step === 2 ? data.after : data.before;
+    return machine(
+      r,
+      step ? computeEvents(r)[0] : null,
+      step ? r.trace.indexOf(computeEvents(r)[0]) + 1 : 0,
+    );
+  },
+  explain: (e) =>
+    e.step === 2
+      ? byId.waiting.explain(e)
+      : byId.parallel.explain({ data: e.data.before }),
+};
+const followDigit = {
+  id: "digit",
+  chapter: "Follow one image",
+  title: "How does an image become a prediction?",
+  steps: 5,
+  instruction: ({ step }) =>
+    [
+      "Press “Inspect this pixel” to see how an image becomes numerical inputs. The network has already been trained.",
+      "Press “Show the first-layer calculation” to inspect one of the 64 totals produced from 784 inputs.",
+      "Press “Prepare the hidden values” to see bias addition, ReLU and rescaling for one total. Extra explanations are available in “Steps”.",
+      "Press “Show the ten scores” to see the second layer combine 64 hidden values into ten digit scores.",
+      "Press “Highlight the largest score” to reveal the predicted digit. Scores are not probabilities.",
+    ][step],
+  button: ({ step }) =>
+    [
+      "Inspect this pixel",
+      "Show the first-layer calculation",
+      "Prepare the hidden values",
+      "Show the ten scores",
+      "Highlight the largest score",
+    ][step],
+  load: digit,
+  act: () => undefined,
+  render: ({ step, data }) =>
+    !data
+      ? ready(data)
+      : pipeline(Math.max(0, Math.min(4, step - 1))) +
+        (step <= 1
+          ? pixels(data, !!step)
+          : step === 2
+            ? dot(data, "first")
+            : step === 3
+              ? hidden(data)
+              : scoreChart(data, step === 5)),
+  explain: ({ step, data }) =>
+    [
+      "",
+      "What changed: a real pixel is shown as FP32 and INT8. There are 784 inputs in this 28 × 28 image.",
+      "What changed: one complete first-layer total is shown. Only three of its 784 terms are displayed; all terms contribute to the total.",
+      "What changed: a learned offset is added, negative values become zero, and rescaling prepares INT8 values for the next layer. These operations are computed but untimed.",
+      "What changed: the second layer produces ten scores, one for each digit. The strongest score will choose the prediction.",
+      `What changed: the largest scores choose FP32 ${data.fp32.prediction} and INT8 ${data.int8.prediction}. Both calculations pass independent arithmetic checks.`,
+    ][step],
+};
+lessons.splice(
+  0,
+  lessons.length,
+  byId.rounding,
+  byId.cycles,
+  parallelAndWaiting,
+  followDigit,
+  byId.performance,
+  byId.capacity,
+);
+export const extraLessons = detailed.filter(
+  (l) => !["rounding", "cycles", "performance", "capacity"].includes(l.id),
+);
+export async function summary(api) {
+  const meta = await cached(api, "/api/meta");
+  return `<p><b>Smaller operands</b> reduce storage and data movement.</p><p><b>Similar accuracy on this test:</b> saved 10,000-image results are FP32 ${fmt((100 * meta.accuracy.fp32_correct) / meta.accuracy.test_images, 2)}% and INT8 ${fmt((100 * meta.accuracy.int8_correct) / meta.accuracy.test_images, 2)}%. Some predictions changed.</p><p><b>The speedup is modeled matrix-stage timing.</b> It is not a measurement of a complete physical chip.</p><p class="caption">Demo finished. Return to your PowerPoint when you are ready.</p>`;
+}

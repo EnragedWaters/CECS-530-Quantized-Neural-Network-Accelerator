@@ -585,3 +585,124 @@ dialog::backdrop {
     margin-left: 0;
   }
 }
+.visual {
+  padding: 18px;
+  gap: 12px;
+}
+.learning-scores {
+  max-height: 155px;
+}
+.learning-scores text {
+  font-size: 20px;
+}
+.extra-list {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+}
+summary {
+  cursor: pointer;
+  min-height: 44px;
+  padding: 8px 0;
+}
+.comparison-bars {
+  display: grid;
+  gap: 20px;
+}
+.comparison-row {
+  display: grid;
+  grid-template-columns: 65px 1fr 145px;
+  align-items: center;
+  gap: 14px;
+}
+.comparison-row strong {
+  font-size: 16px;
+}
+.stack-track {
+  display: flex;
+  height: 35px;
+  background: var(--paper);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.fp-fill {
+  background: var(--blue);
+}
+.int-fill {
+  background: var(--orange);
+}
+.transfer-fill {
+  background: #cee1e8;
+}
+.speed-result {
+  text-align: center;
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--teal);
+}
+.memory-example {
+  margin: 14px 0 24px;
+}
+.memory-example > div:first-child {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  font-size: 16px;
+}
+.memory-rail {
+  height: 26px;
+  background: var(--paper);
+  position: relative;
+  margin-top: 10px;
+}
+.memory-rail i {
+  display: block;
+  height: 100%;
+  border-radius: 4px;
+}
+.memory-rail > b {
+  position: absolute;
+  top: -6px;
+  bottom: -6px;
+  width: 3px;
+  background: var(--navy);
+  transform: translateX(-3px);
+}
+@media (max-width: 700px) {
+  .comparison-row {
+    grid-template-columns: 1fr 1fr;
+  }
+  .comparison-row .stack-track {
+    grid-column: 1/-1;
+    grid-row: 2;
+  }
+  .comparison-row strong {
+    text-align: right;
+  }
+  .memory-example > div:first-child {
+    flex-wrap: wrap;
+  }
+}
+/* Let short instructions use their natural height, keeping the result and action together. */
+main {
+  padding: 18px 32px;
+}
+.instruction {
+  min-height: 0;
+}
+@media (max-width: 700px) {
+  main {
+    padding: 20px 16px;
+  }
+}
+.app-header,
+.number-story,
+.term-row,
+.machine-route,
+.lesson-actions,
+.welcome-flow {
+  flex-wrap: wrap;
+}
+.score-key {
+  row-gap: 6px;
+}

@@ -1,11 +1,13 @@
-import { lessons } from "/lessons.js";
+import { lessons, extraLessons, summary } from "/lessons.js";
 const $ = (id) => document.getElementById(id);
-const entries = lessons.map(() => ({ step: 0, data: null, ready: false }));
+const catalog = [...lessons, ...extraLessons];
+const entries = catalog.map(() => ({ step: 0, data: null, ready: false }));
 let index = -1,
   version = 0,
   busy = false,
   failure = null,
-  exploring = false;
+  exploring = false,
+  detailReturn = 0;
 export async function api(path, body) {
   const response = await fetch(
     path,
@@ -24,15 +26,32 @@ export async function api(path, body) {
 function screens(name) {
   for (const id of ["welcome", "lesson", "finish"]) $(id).hidden = id !== name;
 }
+function focusAction() {
+  $("lesson-action").focus({ preventScroll: true });
+}
+function nextIndex() {
+  return index >= lessons.length
+    ? detailReturn
+    : index === lessons.length - 1
+      ? -2
+      : index + 1;
+}
 function render() {
-  const lesson = lessons[index],
+  const lesson = catalog[index],
     entry = entries[index],
-    complete = entry.step >= lesson.steps;
-  $("lesson-progress").textContent =
-    `${lesson.chapter} · Lesson ${index + 1} of ${lessons.length}`;
+    complete = entry.step >= lesson.steps,
+    extra = index >= lessons.length;
+  $("lesson-progress").textContent = extra
+    ? `Extra explanation · ${lesson.chapter}`
+    : `${lesson.chapter} · Step ${index + 1} of ${lessons.length}`;
   $("lesson-title").textContent = lesson.title;
+  const after = extra
+    ? "Return to demo"
+    : index === lessons.length - 1
+      ? "Finish demo"
+      : "Next step →";
   const action = complete
-    ? "Next lesson →"
+    ? after
     : typeof lesson.button === "function"
       ? lesson.button(entry)
       : lesson.button;
@@ -47,7 +66,7 @@ function render() {
     : failure
       ? "This action could not finish. Press “Retry” to try again."
       : complete
-        ? "Press “Next lesson” when you are ready to continue."
+        ? `Press “${after.replace(" →", "")}” when you are ready to continue.`
         : typeof lesson.instruction === "function"
           ? lesson.instruction(entry)
           : lesson.instruction;
@@ -58,25 +77,42 @@ function render() {
   $("lesson-result").hidden = !entry.step || Boolean(failure) || busy;
   $("lesson-result").textContent = entry.step ? lesson.explain(entry) : "";
   $("replay").hidden = !complete;
-  $("skip").hidden = complete;
+  $("skip").hidden = complete || extra;
+  $("back").textContent = extra ? "← Return to demo" : "← Back";
+  $("back").hidden = extra && complete;
+}
+async function finish() {
+  screens("finish");
+  $("takeaways").textContent = "Loading the saved full-test summary…";
+  const token = version;
+  try {
+    const content = await summary(api);
+    if (version === token) $("takeaways").innerHTML = content;
+  } catch {
+    if (version !== token) return;
+    $("takeaways").textContent = "The saved summary could not load. ";
+    const button = document.createElement("button");
+    button.textContent = "Retry summary";
+    button.onclick = finish;
+    $("takeaways").append(button);
+  }
 }
 async function go(next) {
   const token = ++version;
   busy = false;
   failure = null;
   index = next;
-  if (index < 0) {
+  if (index === -1) {
     screens("welcome");
+    $("start-learning").focus({ preventScroll: true });
     return;
   }
-  if (index >= lessons.length) {
-    screens("finish");
-    $("takeaways").innerHTML =
-      "<p>Smaller operands reduce storage and data movement.</p><p>Rounding can change a result.</p>";
+  if (index === -2) {
+    await finish();
     return;
   }
   screens("lesson");
-  const lesson = lessons[index],
+  const lesson = catalog[index],
     entry = entries[index];
   if (lesson.load && !entry.ready) {
     busy = true;
@@ -94,13 +130,14 @@ async function go(next) {
   }
   render();
   window.scrollTo({ top: 0, behavior: "instant" });
+  focusAction();
 }
 async function act() {
-  if (busy || exploring) return;
-  const lesson = lessons[index],
+  if (busy || exploring || index < 0) return;
+  const lesson = catalog[index],
     entry = entries[index];
   if (entry.step >= lesson.steps && !failure) {
-    await go(index + 1);
+    await go(nextIndex());
     return;
   }
   if (lesson.load && !entry.ready) {
@@ -118,37 +155,41 @@ async function act() {
     entry.step++;
     busy = false;
     render();
+    focusAction();
   } catch (error) {
     if (token !== version) return;
     busy = false;
     failure = error;
     render();
+    focusAction();
   }
 }
 function explore() {
   exploring = !exploring;
   $("learning-main").hidden = exploring;
   $("exploration").hidden = !exploring;
-  $("explore-toggle").textContent = exploring
-    ? "← Return to lesson"
-    : "Explore";
+  $("explore-toggle").textContent = exploring ? "← Return to demo" : "Explore";
   $("choose-lesson").hidden = exploring;
   if (exploring && !$("explore-frame").getAttribute("src"))
     $("explore-frame").src = "/explore";
+  if (!exploring) {
+    $("explore-frame").contentWindow?.postMessage(
+      "pause-explore",
+      location.origin,
+    );
+    $("explore-toggle").focus({ preventScroll: true });
+  }
 }
 function picker() {
   $("lesson-picker").showModal();
 }
 $("start-learning").onclick = () => go(0);
 $("lesson-action").onclick = act;
-$("back").onclick = () => go(index - 1);
-$("skip").onclick = () => go(index + 1);
+$("back").onclick = () =>
+  go(index >= lessons.length ? detailReturn : index - 1);
+$("skip").onclick = () => go(nextIndex());
 $("replay").onclick = () => {
-  entries[index] = {
-    step: 0,
-    data: entries[index].data,
-    ready: entries[index].ready,
-  };
+  entries[index] = { ...entries[index], step: 0 };
   go(index);
 };
 $("restart").onclick = () => {
@@ -160,17 +201,28 @@ $("finish-explore").onclick = explore;
 $("choose-lesson").onclick = picker;
 $("finish-lessons").onclick = picker;
 $("close-picker").onclick = () => $("lesson-picker").close();
-$("lesson-list").replaceChildren(
-  ...lessons.map((lesson, i) => {
-    const button = document.createElement("button");
-    button.textContent = `${i + 1}. ${lesson.title}`;
-    button.onclick = () => {
-      $("lesson-picker").close();
-      go(i);
-    };
-    return button;
-  }),
+function lessonButton(l, i) {
+  const button = document.createElement("button");
+  button.dataset.lesson = l.id;
+  button.textContent = l.title;
+  button.onclick = () => {
+    if (i >= lessons.length && index < lessons.length) detailReturn = index;
+    $("lesson-picker").close();
+    go(i);
+  };
+  return button;
+}
+$("lesson-list").replaceChildren(...lessons.map((l, i) => lessonButton(l, i)));
+const details = document.createElement("details"),
+  label = document.createElement("summary"),
+  extra = document.createElement("div");
+label.textContent = "Extra explanations (optional)";
+extra.className = "extra-list";
+extra.append(
+  ...extraLessons.map((l, i) => lessonButton(l, i + lessons.length)),
 );
+details.append(label, extra);
+$("lesson-list").append(details);
 $("fullscreen").onclick = async () => {
   try {
     if (document.fullscreenElement) await document.exitFullscreen();
@@ -186,3 +238,31 @@ document.addEventListener(
       ? "Exit full screen"
       : "Full screen"),
 );
+document.addEventListener("keydown", (event) => {
+  if (
+    exploring ||
+    $("lesson-picker").open ||
+    index < 0 ||
+    ["INPUT", "SELECT", "TEXTAREA", "BUTTON", "A"].includes(
+      document.activeElement.tagName,
+    )
+  )
+    return;
+  if (event.code === "ArrowRight") {
+    event.preventDefault();
+    act();
+  }
+  if (event.code === "ArrowLeft") {
+    event.preventDefault();
+    go(index >= lessons.length ? detailReturn : index - 1);
+  }
+});
+window.addEventListener("message", (event) => {
+  if (
+    event.origin === location.origin &&
+    event.source === $("explore-frame").contentWindow &&
+    event.data === "close-explore" &&
+    exploring
+  )
+    explore();
+});

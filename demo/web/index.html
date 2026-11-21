@@ -13,14 +13,14 @@
         >≈ <span>Inside our accelerator</span></a
       >
       <nav aria-label="Demo tools">
-        <button id="choose-lesson">Lessons</button
+        <button id="choose-lesson">Steps</button
         ><button id="explore-toggle">Explore</button
         ><button id="fullscreen">Full screen</button>
       </nav>
     </header>
     <main id="learning-main">
       <section id="welcome" class="welcome">
-        <p class="eyebrow">A VISUAL WALKTHROUGH · CECS 530</p>
+        <p class="eyebrow">A SHORT COMPANION TO OUR PRESENTATION</p>
         <h1>Smaller numbers.<br />The same task.</h1>
         <p>
           We compare two ways to run an already-trained digit recognizer on a
@@ -51,7 +51,7 @@
           Follow the numbers, watch the hardware model work, then compare the
           results.
         </p>
-        <button id="start-learning" class="primary">Start learning →</button>
+        <button id="start-learning" class="primary">Start demo →</button>
       </section>
       <section id="lesson" class="lesson" hidden aria-labelledby="lesson-title">
         <p id="lesson-progress" class="eyebrow"></p>
@@ -62,18 +62,18 @@
         <p id="lesson-error" class="error" role="alert" hidden></p>
         <footer class="lesson-actions">
           <button id="back">← Back</button
-          ><button id="skip" class="quiet">Skip lesson</button
-          ><button id="replay" class="quiet" hidden>Replay lesson</button
+          ><button id="skip" class="quiet">Skip step</button
+          ><button id="replay" class="quiet" hidden>Replay step</button
           ><button id="lesson-action" class="primary"></button>
         </footer>
       </section>
       <section id="finish" class="welcome" hidden>
         <p class="eyebrow">WALKTHROUGH COMPLETE</p>
-        <h1>What did we learn?</h1>
+        <h1>Demo complete</h1>
         <div id="takeaways"></div>
         <div class="finish-actions">
           <button id="restart" class="primary">Replay</button
-          ><button id="finish-lessons">Choose a lesson</button
+          ><button id="finish-lessons">Choose a step</button
           ><button id="finish-explore">Explore</button>
         </div>
       </section>
@@ -86,10 +86,10 @@
     </section>
     <dialog id="lesson-picker" aria-labelledby="picker-title">
       <div class="dialog-heading">
-        <h2 id="picker-title">Choose a lesson</h2>
+        <h2 id="picker-title">Choose a step</h2>
         <button id="close-picker" aria-label="Close lesson list">×</button>
       </div>
-      <nav id="lesson-list" aria-label="Lessons"></nav>
+      <nav id="lesson-list" aria-label="Demo steps"></nav>
     </dialog>
   </body>
 </html>

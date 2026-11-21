@@ -36,64 +36,9 @@ def check(url, screenshots=None):
         context.route("**/*", route)
         page = context.new_page()
         page.on("pageerror", lambda error: errors.append(str(error)))
-        page.goto(url, wait_until="networkidle")
-        expect(page.locator("#welcome")).to_be_visible()
-        page.locator("#start-learning").click()
-        expect(page.locator("#lesson-action")).to_have_text("Convert 1.23")
-        expect(page.locator("#lesson-result")).to_be_hidden()
-        page.locator("#lesson-action").click()
-        expect(page.locator("#lesson-result")).to_contain_text("0.03")
-        page.set_viewport_size({"width": 1280, "height": 720})
-        assert page.evaluate(
-            "document.documentElement.scrollHeight <= innerHeight"
-        ), "Lesson requires scrolling"
-        if screenshots:
-            page.screenshot(path=str(screenshots / "first-learning-lesson.png"))
-        page.locator("#lesson-action").click()
-        expect(page.locator("#lesson-action")).to_have_text("Try 200")
-        page.locator("#lesson-action").click()
-        expect(page.locator("#lesson-result")).to_contain_text("clipped to 127")
-        page.locator("#lesson-action").click()
-        for total in [8, 23, 29]:
-            expect(page.locator("#lesson-action")).to_have_text("Add the next product")
-            page.locator("#lesson-action").click()
-            expect(page.locator(".running-total strong")).to_have_text(str(total))
-        page.locator("#lesson-action").click()
-        page.locator("#lesson-action").click()
-        expect(page.locator("#lesson-result")).to_contain_text("16,129")
-        page.locator("#lesson-action").click()
-        for cycle in range(1, 7):
-            expect(page.locator("#lesson-action")).to_have_text("Next clock cycle")
-            page.locator("#lesson-action").click()
-            expect(page.locator(".cycle-state")).to_contain_text(
-                f"Clock cycle {cycle} of 6"
-            )
-        expect(page.locator("#lesson-result")).to_contain_text("answer is 29")
-        page.locator("#lesson-action").click()
-        page.locator("#lesson-action").click()
-        expect(page.locator(".learning-lane.working")).to_have_count(8)
-        page.locator("#lesson-action").click()
-        page.locator("#lesson-action").click()
-        expect(page.locator(".learning-lane.working")).to_have_count(4)
-        expect(page.locator(".learning-lane.waiting")).to_have_count(4)
-        for count in [1, 1, 3, 1, 1, 1]:
-            page.locator("#lesson-action").click()
-            expect(page.locator("#lesson-action")).to_be_enabled()
-            if "largest score" not in page.locator("#lesson-action").inner_text():
-                expect(page.locator(".prediction-reveal")).to_have_count(0)
-            for _ in range(count):
-                page.locator("#lesson-action").click()
-                expect(page.locator("#lesson-action")).to_be_enabled()
-            expect(page.locator("#lesson-result")).to_be_visible()
-        expect(page.locator("#lesson-result")).to_contain_text("Fifteen")
-        page.locator("#choose-lesson").click()
-        page.locator("#lesson-list button").nth(0).click()
-        page.locator("#explore-toggle").click()
-        expect(
-            page.frame_locator("#explore-frame").locator("#toy-stage")
-        ).to_be_visible()
-        page.locator("#explore-toggle").click()
-        expect(page.locator("#lesson-result")).to_contain_text("0.03")
+        from demo.tests.learning_check import check_learning
+
+        check_learning(page, url, screenshots)
         page.goto(url + "/explore", wait_until="networkidle")
         expect(page.locator("#toy-stage")).to_be_visible()
         expect(page.locator("#toy-total")).to_have_text("6")
@@ -219,7 +164,7 @@ def check(url, screenshots=None):
         context.close()
         browser.close()
     print(
-        "PASS: playback, lane states, quantization, all inference stages, disagreements, hardware controls, error recovery, guided tour, and responsive layouts. External browser requests were blocked; none were attempted."
+        "PASS: playback, lane states, quantization, all inference stages, disagreements, hardware controls, error recovery, the six-stop presentation route, optional explanations, and responsive layouts. External browser requests were blocked; none were attempted."
     )
 
 

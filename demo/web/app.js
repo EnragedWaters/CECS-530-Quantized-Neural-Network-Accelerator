@@ -953,3 +953,16 @@ document.querySelectorAll("[data-hardware]").forEach(
     }),
 );
 runHardware();
+window.addEventListener("message", (event) => {
+  if (
+    event.origin === location.origin &&
+    event.source === window.parent &&
+    event.data === "pause-explore"
+  )
+    pause();
+});
+if (window.parent !== window)
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape")
+      window.parent.postMessage("close-explore", location.origin);
+  });
