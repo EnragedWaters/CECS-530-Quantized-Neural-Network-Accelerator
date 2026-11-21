@@ -1,0 +1,1133 @@
+/* Browser code presents real backend calculations; it does not recreate the numerical model. */
+"use strict";
+const $ = (id) => document.getElementById(id);
+const fmt = (n, d = 0) =>
+  Number(n).toLocaleString(undefined, { maximumFractionDigits: d });
+const phases = ["load_inputs", "load_weights", "compute", "store_outputs"];
+const phaseNames = {
+  load_inputs: "Load inputs",
+  load_weights: "Load weights",
+  compute: "Compute",
+  store_outputs: "Store answers",
+};
+const state = {
+  view: "accelerator",
+  precision: "int8",
+  run: null,
+  position: 0,
+  timer: null,
+  request: 0,
+  meta: null,
+};
+async function api(path, body) {
+  const r = await fetch(
+    path,
+    body === undefined
+      ? {}
+      : {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        },
+  );
+  const data = await r.json();
+  if (!r.ok) throw Error(data.error || "The calculation could not finish.");
+  return data;
+}
+function pause() {
+  if (state.timer) clearInterval(state.timer);
+  state.timer = null;
+  $("play").textContent = "▶ Play";
+}
+function selectView(name) {
+  pause();
+  state.view = name;
+  document
+    .querySelectorAll(".view")
+    .forEach((v) => (v.hidden = v.id !== name + "-view"));
+  document.querySelectorAll("[data-view]").forEach((b) => {
+    b.classList.toggle("selected", b.dataset.view === name);
+    if (b.dataset.view === name) b.setAttribute("aria-current", "page");
+    else b.removeAttribute("aria-current");
+  });
+}
+async function loadToy() {
+  pause();
+  state.run = null;
+  state.position = 0;
+  const request = ++state.request;
+  $("toy-error").hidden = true;
+  $("toy-stage").hidden = true;
+  try {
+    const run = await api("/api/simulate", {
+      preset: $("toy-preset").value,
+      precision: state.precision,
+      config: {
+        lanes: +$("toy-lanes").value,
+        local_read_bytes_per_cycle: +$("toy-local").value,
+        external_bytes_per_cycle: +$("toy-external").value,
+      },
+    });
+    if (request !== state.request) return;
+    state.run = run;
+    $("toy-stage").hidden = false;
+    renderToy();
+  } catch (e) {
+    if (request !== state.request) return;
+    $("toy-error").textContent = e.message;
+    $("toy-error").hidden = false;
+    $("toy-total").textContent = "—";
+    $("toy-answer").textContent = "—";
+  }
+}
+function renderToy() {
+  const r = state.run;
+  if (!r) return;
+  const n = state.position;
+  const event = n ? r.trace[n - 1] : null;
+  const active = event?.phase;
+  $("trace-position").max = r.trace.length;
+  $("trace-position").value = n;
+  $("cycle-label").textContent = `Cycle ${n} of ${fmt(r.metrics.total_cycles)}`;
+  $("phase-pill").textContent =
+    n === r.trace.length ? "Complete" : phaseNames[active] || "Ready to start";
+  $("external-path").classList.toggle(
+    "flowing",
+    active === "load_inputs" ||
+      active === "load_weights" ||
+      active === "store_outputs",
+  );
+  $("local-path").classList.toggle("flowing", active === "compute");
+  $("machine-lane-caption").textContent =
+    `${r.config.lanes} ${r.config.lanes === 1 ? "lane" : "lanes"} · ${r.precision === "int8" ? "2" : "8"} bytes per multiply-add`;
+  $("phase-timeline").replaceChildren(
+    ...phases.map((phase) => {
+      const b = document.createElement("button");
+      b.textContent = `${phaseNames[phase]} · ${r.metrics[phase + "_cycles"]}`;
+      b.style.flex = r.metrics[phase + "_cycles"];
+      b.className =
+        phase === active
+          ? "active"
+          : active && phases.indexOf(phase) < phases.indexOf(active)
+            ? "past"
+            : "";
+      b.onclick = () => {
+        pause();
+        state.position = r.trace.findIndex((e) => e.phase === phase) + 1;
+        renderToy();
+      };
+      return b;
+    }),
+  );
+  const currentValues = {};
+  let group = -1;
+  for (const e of r.trace.slice(0, n)) {
+    if (e.phase !== "compute") continue;
+    if (e.group_start !== group) {
+      group = e.group_start;
+      Object.keys(currentValues).forEach((k) => delete currentValues[k]);
+    }
+    for (const op of e.macs) currentValues[op.lane] = op;
+  }
+  const grid = $("lane-grid");
+  grid.style.setProperty("--lanes", Math.min(r.config.lanes, 8));
+  grid.replaceChildren(
+    ...Array.from({ length: r.config.lanes }, (_, i) => {
+      const op = currentValues[i];
+      const activeOp = event?.macs?.find((o) => o.lane === i);
+      const status = activeOp
+        ? "working"
+        : event?.waiting_lanes?.includes(i)
+          ? "waiting"
+          : event?.unused_lanes?.includes(i)
+            ? "unused"
+            : op?.finished
+              ? "done"
+              : "";
+      const div = document.createElement("div");
+      div.className = "lane " + status;
+      const title = document.createElement("strong");
+      title.textContent = "Lane " + (i + 1);
+      const value = document.createElement("div");
+      value.className = "sum";
+      value.textContent = op ? fmt(op.accumulator, 4) : "—";
+      const detail = document.createElement("small");
+      detail.textContent = activeOp
+        ? `${fmt(activeOp.left, 3)} × ${fmt(activeOp.right, 3)}`
+        : status === "waiting"
+          ? "Waiting for data"
+          : status === "unused"
+            ? "No output assigned"
+            : op?.finished
+              ? "Output complete"
+              : "Ready";
+      div.append(title, value, detail);
+      return div;
+    }),
+  );
+  let explanation = "Press Step to load the input values.";
+  if (event?.bytes)
+    explanation = `${phaseNames[active]}: move ${event.bytes} bytes this cycle (${fmt(event.phase_moved_bytes)} of ${fmt(event.phase_total_bytes)} bytes).`;
+  if (active === "compute") {
+    const op = event.macs[0];
+    explanation = `Lane ${op.lane + 1}: ${fmt(op.accumulator_before, 4)} + (${fmt(op.left, 4)} × ${fmt(op.right, 4)}) = ${fmt(op.accumulator, 4)}. ${event.macs.length} ${event.macs.length === 1 ? "lane works" : "lanes work"} this cycle.`;
+    if (event.waiting_lanes.length)
+      explanation += ` ${event.waiting_lanes.length} wait for the local read connection.`;
+  }
+  if (n === r.trace.length)
+    explanation = `Finished. ${r.output[0].length} ${r.output[0].length === 1 ? "answer" : "answers"} stored: ${r.output[0].map((v) => fmt(v, 4)).join(", ")}.`;
+  $("event-explanation").textContent = explanation;
+  $("toy-total").textContent = fmt(r.metrics.total_cycles);
+  $("toy-answer").textContent = fmt(r.output[0][0], 4);
+  $("step").disabled = n >= r.trace.length;
+  $("toy-equation").replaceChildren(
+    document.createTextNode(
+      r.preset === "tail" ? "64 terms of (1 × 1)" : "2 × 4 + 3 × 5 + 1 × 6",
+    ),
+  );
+  const equationAnswer = document.createElement("strong");
+  equationAnswer.textContent = "= " + r.output[0][0];
+  $("toy-equation").append(equationAnswer);
+  $("toy-lesson-title").textContent =
+    r.preset === "single"
+      ? "Where does 29 come from?"
+      : r.preset === "parallel"
+        ? "Independent outputs can run together."
+        : "A last group can leave lanes unused.";
+  $("toy-lesson").textContent =
+    r.preset === "tail"
+      ? "There are ten outputs, each with 64 terms. With eight lanes, the second group has only two outputs. Empty lanes are different from lanes waiting for data."
+      : "Load the values, calculate each output’s dot product, then store the answers. More lanes help only when they have independent outputs and enough data.";
+}
+function step() {
+  if (state.run && state.position < state.run.trace.length) {
+    state.position++;
+    renderToy();
+  } else pause();
+}
+function play() {
+  if (!state.run) return;
+  if (state.timer) {
+    pause();
+    return;
+  }
+  if (state.position >= state.run.trace.length) state.position = 0;
+  state.timer = setInterval(() => {
+    step();
+    if (state.position >= state.run.trace.length) pause();
+  }, +$("playback-speed").value);
+  $("play").textContent = "Ⅱ Pause";
+}
+$("play").onclick = play;
+$("step").onclick = () => {
+  pause();
+  step();
+};
+$("reset").onclick = () => {
+  pause();
+  state.position = 0;
+  renderToy();
+};
+$("trace-position").oninput = (e) => {
+  pause();
+  state.position = +e.target.value;
+  renderToy();
+};
+$("playback-speed").onchange = () => {
+  if (state.timer) {
+    pause();
+    play();
+  }
+};
+["toy-lanes", "toy-local", "toy-external"].forEach(
+  (id) => ($(id).onchange = loadToy),
+);
+$("toy-preset").onchange = () => {
+  $("toy-lanes").value = $("toy-preset").value === "single" ? "1" : "8";
+  loadToy();
+};
+document.querySelectorAll("[data-precision]").forEach(
+  (b) =>
+    (b.onclick = () => {
+      state.precision = b.dataset.precision;
+      document.querySelectorAll("[data-precision]").forEach((x) => {
+        x.classList.toggle("selected", x === b);
+        x.setAttribute("aria-pressed", String(x === b));
+      });
+      loadToy();
+    }),
+);
+document
+  .querySelectorAll("[data-view]")
+  .forEach((b) => (b.onclick = () => selectView(b.dataset.view)));
+document.addEventListener("keydown", (e) => {
+  if (
+    ["INPUT", "SELECT", "TEXTAREA", "BUTTON"].includes(
+      document.activeElement.tagName,
+    ) ||
+    state.view !== "accelerator"
+  )
+    return;
+  if (e.code === "Space") {
+    e.preventDefault();
+    play();
+  }
+  if (e.code === "ArrowRight") {
+    e.preventDefault();
+    pause();
+    step();
+  }
+  if (e.code === "ArrowLeft") {
+    e.preventDefault();
+    pause();
+    state.position = Math.max(0, state.position - 1);
+    renderToy();
+  }
+});
+loadToy();
+
+let quantRequest = 0;
+async function updateQuantization() {
+  const request = ++quantRequest;
+  $("quant-error").hidden = true;
+  $("quant-result").hidden = true;
+  try {
+    const q = await api("/api/quantize", {
+      value: Number($("quant-value").value),
+      scale: Number($("quant-scale").value),
+    });
+    if (request !== quantRequest) return;
+    $("quant-result").hidden = false;
+    for (const [id, key] of [
+      ["quant-original", "value"],
+      ["quant-scaled", "scaled"],
+      ["quant-stored", "stored"],
+      ["quant-reconstructed", "reconstructed"],
+    ])
+      $(id).textContent = fmt(q[key], 4);
+    $("quant-loss").textContent = fmt(q.error, 5) + " difference";
+    $("quant-marker").style.left =
+      `calc(${((q.stored + 127) / 254) * 100}% - 6px)`;
+    $("quant-explanation").textContent = q.clipped
+      ? `This value is outside the stored range. It clips to ${q.stored}; multiplying by the scale cannot recover what was lost.`
+      : `Divide by ${q.scale}, round to the nearest integer, and reconstruct by multiplying by ${q.scale}. Halfway cases round to the nearest even integer.`;
+    $("wide-product").textContent = fmt(q.large_product);
+    $("bias-total").textContent = q.biased_total;
+    $("bias-rescaled").textContent = q.rescaled;
+  } catch (e) {
+    if (request !== quantRequest) return;
+    $("quant-error").textContent = e.message;
+    $("quant-error").hidden = false;
+  }
+}
+["quant-value", "quant-scale"].forEach((id) =>
+  $(id).addEventListener("input", updateQuantization),
+);
+for (const [id, value, scale] of [
+  ["round-example", 1.23, 0.1],
+  ["clip-example", 200, 1],
+  ["tie-example", 0.5, 1],
+])
+  $(id).onclick = () => {
+    $("quant-value").value = value;
+    $("quant-scale").value = scale;
+    updateQuantization();
+  };
+updateQuantization();
+
+// A live prediction is distinct from the archived full-test accuracy shown below it.
+state.exampleId = 0;
+state.digitResult = null;
+state.digitStage = "pixels";
+state.digitRequest = 0;
+function drawDigit(canvas, pixels) {
+  const context = canvas.getContext("2d");
+  const image = context.createImageData(28, 28);
+  pixels.forEach((v, i) => {
+    image.data.set([v, v, v, 255], i * 4);
+  });
+  context.putImageData(image, 0, 0);
+}
+function renderGallery() {
+  if (!state.meta) return;
+  const filter = $("gallery-filter").value;
+  const examples = state.meta.examples.filter((e) =>
+    filter === "different"
+      ? e.disagreement
+      : filter === "mistake"
+        ? e.fp32_prediction !== e.label || e.int8_prediction !== e.label
+        : filter === "correct"
+          ? e.fp32_prediction === e.label && e.int8_prediction === e.label
+          : true,
+  );
+  $("digit-gallery").replaceChildren(
+    ...examples.map((e) => {
+      const b = document.createElement("button");
+      b.className = e.id === state.exampleId ? "selected" : "";
+      b.setAttribute(
+        "aria-label",
+        `MNIST image ${e.id}, known digit ${e.label}`,
+      );
+      b.setAttribute("aria-pressed", String(e.id === state.exampleId));
+      const c = document.createElement("canvas");
+      c.width = c.height = 28;
+      drawDigit(c, e.pixels);
+      const label = document.createElement("span");
+      label.textContent = "#" + e.id;
+      b.append(c, label);
+      b.onclick = () => selectExample(e.id);
+      return b;
+    }),
+  );
+  return examples;
+}
+function selectExample(id) {
+  state.exampleId = id;
+  const e = state.meta.examples.find((e) => e.id === id);
+  drawDigit($("selected-digit"), e.pixels);
+  $("selected-example").textContent = "MNIST image " + id;
+  $("known-digit").textContent = "Known digit: " + e.label;
+  renderGallery();
+  return runDigit();
+}
+async function runDigit() {
+  state.digitResult = null;
+  const token = ++state.digitRequest;
+  $("digit-result").hidden = true;
+  $("digit-error").hidden = true;
+  $("digit-loading").hidden = false;
+  $("run-digit").disabled = true;
+  try {
+    const r = await api("/api/infer", { example_id: state.exampleId });
+    if (token !== state.digitRequest) return;
+    state.digitResult = r;
+    $("digit-result").hidden = false;
+    for (const [prefix, p] of [
+      ["fp", "fp32"],
+      ["int", "int8"],
+    ]) {
+      $(prefix + "-prediction").textContent = r[p].prediction;
+      $(prefix + "-correct").textContent =
+        r[p].prediction === r.label
+          ? "Matches the known digit"
+          : "Different from the known digit";
+    }
+    $("digit-verification").textContent =
+      "Arithmetic checked: exact integer results; FP32 within the fixed rounding tolerance.";
+    $("live-timing-note").textContent =
+      `This image’s matrix stages: ${fmt(r.fp32.metrics.total_cycles)} FP32 cycles and ${fmt(r.int8.metrics.total_cycles)} INT8 cycles at the baseline settings. Bias, activation and rescaling are calculated but not cycle-timed.`;
+    renderDigitStage();
+  } catch (e) {
+    if (token !== state.digitRequest) return;
+    $("digit-error").textContent = e.message;
+    $("digit-error").hidden = false;
+  } finally {
+    if (token === state.digitRequest) {
+      $("digit-loading").hidden = true;
+      $("run-digit").disabled = false;
+    }
+  }
+}
+const digitStageInfo = {
+  pixels: [
+    "Input preparation · not cycle-timed",
+    "A picture is a table of values.",
+    "The image supplies 784 grayscale bytes. Normalize them for FP32, or represent them as INT8 values with a fixed scale.",
+  ],
+  first: [
+    "Matrix stage · cycle-timed",
+    "784 inputs become 64 totals.",
+    "Each output dot product multiplies the image values by one column of learned weights. The accelerator schedules those multiply-adds across its lanes.",
+  ],
+  hidden: [
+    "Bias, ReLU and rescaling · not cycle-timed",
+    "Keep useful values in consistent units.",
+    "Add the learned biases. ReLU replaces negative values with zero. The integer path rescales its totals into INT8 hidden values for the next matrix.",
+  ],
+  second: [
+    "Matrix stage · cycle-timed",
+    "64 hidden values become ten totals.",
+    "The second matrix uses the first layer’s computed hidden values. Its ten outputs correspond to the ten possible digits.",
+  ],
+  scores: [
+    "Digit selection · not cycle-timed",
+    "The largest score chooses the digit.",
+    "Add the output bias and choose the largest score. Close scores can change order when values are quantized. A wrong guess can still be an arithmetically correct simulation.",
+  ],
+};
+function renderDigitStage() {
+  const r = state.digitResult;
+  if (!r) return;
+  const stage = state.digitStage;
+  document
+    .querySelectorAll("[data-stage]")
+    .forEach((b) => b.classList.toggle("selected", b.dataset.stage === stage));
+  const [badge, title, copy] = digitStageInfo[stage];
+  $("stage-badge").textContent = badge;
+  $("stage-title").textContent = title;
+  $("stage-copy").textContent = copy;
+  $("pixel-inspection").hidden = stage !== "pixels";
+  $("hidden-inspection").hidden = stage !== "hidden";
+  $("stage-metrics").hidden = !["first", "second"].includes(stage);
+  $("score-inspection").hidden = stage !== "scores";
+  if (stage === "pixels") {
+    drawDigit($("pixel-map"), r.pixels);
+    inspectPixel(
+      Math.max(
+        0,
+        r.pixels.findIndex((v) => v > 0 && v < 255),
+      ),
+    );
+  }
+  if (stage === "hidden") {
+    const max = Math.max(...r.fp32.hidden, ...r.int8.hidden_display, 0.01);
+    for (const [id, values, raw, color] of [
+      ["hidden-fp", r.fp32.hidden, r.fp32.hidden, "blue"],
+      ["hidden-int", r.int8.hidden_display, r.int8.hidden, "orange"],
+    ]) {
+      $(id).replaceChildren(
+        ...values.map((v, i) => {
+          const c = document.createElement("span");
+          c.style.background = `rgba(${color === "blue" ? "40,114,152" : "173,89,52"},${0.08 + (0.65 * v) / max})`;
+          c.textContent = fmt(raw[i], raw === r.int8.hidden ? 0 : 1);
+          c.title = `Hidden value ${i}: ${fmt(v, 5)} in comparable units`;
+          return c;
+        }),
+      );
+    }
+    $("hidden-note").textContent =
+      `Both heatmaps use the same display scale. INT8 cells show stored integers; ${r.int8.clipped} hidden values clipped for this image. Hidden scale stays ${fmt(r.quantization.activation_scale, 7)}.`;
+  }
+  if (["first", "second"].includes(stage)) {
+    const i = stage === "first" ? 0 : 1;
+    $("stage-metrics").replaceChildren(
+      ...[
+        ["FP32 cycles", r.fp32.metrics.layers[i].total_cycles, "blue"],
+        ["INT8 cycles", r.int8.metrics.layers[i].total_cycles, "orange"],
+        ["Multiply-adds", r.int8.metrics.layers[i].macs, ""],
+        [
+          "INT8 transfer bytes",
+          r.int8.metrics.layers[i].external_bytes_transferred,
+          "",
+        ],
+      ].map(([label, value, color]) => metric(label, fmt(value), color)),
+    );
+  }
+  if (stage === "scores") {
+    renderScores(r.fp32.scores, r.int8.scores_display);
+    $("raw-scores").textContent = r.int8.scores
+      .map((s, i) => `${i}: ${s}`)
+      .join(" · ");
+  }
+}
+function metric(label, value, color = "") {
+  const d = document.createElement("div");
+  d.className = "metric";
+  const v = document.createElement("strong");
+  v.className = color;
+  v.textContent = value;
+  const l = document.createElement("span");
+  l.textContent = label;
+  d.append(v, l);
+  return d;
+}
+function inspectPixel(index) {
+  const r = state.digitResult;
+  if (!r) return;
+  const d = $("pixel-details");
+  d.replaceChildren();
+  for (const text of [
+    `Pixel (${Math.floor(index / 28)}, ${index % 28}): ${r.pixels[index]} / 255`,
+    `FP32: ${fmt(r.inputs_fp32[index], 5)}`,
+    `Stored INT8: ${r.inputs_int8[index]}`,
+    `Reconstructed: ${fmt(r.inputs_int8[index] * r.quantization.input_scale, 5)}`,
+  ]) {
+    const p = document.createElement("div");
+    p.textContent = text;
+    d.append(p);
+  }
+}
+$("pixel-map").onclick = (e) => {
+  const box = e.currentTarget.getBoundingClientRect();
+  const x = Math.min(
+    27,
+    Math.max(0, Math.floor(((e.clientX - box.left) / box.width) * 28)),
+  );
+  const y = Math.min(
+    27,
+    Math.max(0, Math.floor(((e.clientY - box.top) / box.height) * 28)),
+  );
+  inspectPixel(y * 28 + x);
+};
+function svgNode(type, attrs, text) {
+  const e = document.createElementNS("http://www.w3.org/2000/svg", type);
+  for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, v);
+  if (text !== undefined) e.textContent = text;
+  return e;
+}
+function renderScores(fp, integer) {
+  const chart = $("score-chart");
+  chart.replaceChildren();
+  const min = Math.min(0, ...fp, ...integer),
+    max = Math.max(0, ...fp, ...integer),
+    span = max - min || 1;
+  const x = (v) => 65 + ((v - min) / span) * 555;
+  const zero = x(0);
+  chart.append(
+    svgNode("line", { x1: zero, x2: zero, y1: 8, y2: 332, stroke: "#b5cbd5" }),
+  );
+  for (let i = 0; i < 10; i++) {
+    const y = 15 + i * 32;
+    chart.append(
+      svgNode(
+        "text",
+        { x: 20, y: y + 14, fill: "#526e7d", "font-size": 13 },
+        i,
+      ),
+    );
+    for (const [values, color, offset] of [
+      [fp, "#287298", 0],
+      [integer, "#ad5934", 12],
+    ]) {
+      const v = values[i],
+        vx = x(v);
+      const bar = svgNode("rect", {
+        x: Math.min(zero, vx),
+        y: y + offset,
+        width: Math.max(1, Math.abs(vx - zero)),
+        height: 9,
+        rx: 2,
+        fill: color,
+      });
+      bar.append(svgNode("title", {}, `Digit ${i}: ${fmt(v, 5)}`));
+      chart.append(bar);
+    }
+    chart.append(
+      svgNode(
+        "text",
+        { x: 630, y: y + 13, fill: "#526e7d", "font-size": 11 },
+        fmt(fp[i], 2),
+      ),
+    );
+  }
+}
+$("run-digit").onclick = runDigit;
+$("gallery-filter").onchange = () => {
+  const examples = renderGallery();
+  if (examples.length) selectExample(examples[0].id);
+};
+document.querySelectorAll("[data-stage]").forEach(
+  (b) =>
+    (b.onclick = () => {
+      state.digitStage = b.dataset.stage;
+      renderDigitStage();
+    }),
+);
+const metaReady = api("/api/meta")
+  .then((meta) => {
+    state.meta = meta;
+    const accuracy = meta.accuracy;
+    $("saved-fp-accuracy").textContent =
+      fmt((100 * accuracy.fp32_correct) / accuracy.test_images, 2) + "%";
+    $("saved-int-accuracy").textContent =
+      fmt((100 * accuracy.int8_correct) / accuracy.test_images, 2) + "%";
+    selectExample(0);
+  })
+  .catch((e) => {
+    $("digit-error").textContent = e.message;
+    $("digit-error").hidden = false;
+  });
+
+state.hardwareRequest = 0;
+state.hardwareResult = null;
+const hardwarePresets = {
+  baseline: [8, 32, 32, 256, 100],
+  starved: [8, 8, 32, 256, 100],
+  extra: [32, 32, 32, 256, 100],
+  capacity: [8, 32, 32, 64, 100],
+};
+const hardwareFields = [
+  "hardware-lanes",
+  "hardware-local",
+  "hardware-external",
+  "hardware-capacity",
+  "hardware-clock",
+];
+async function runHardware() {
+  const token = ++state.hardwareRequest;
+  state.hardwareResult = null;
+  $("hardware-results").hidden = true;
+  $("hardware-error").hidden = true;
+  $("hardware-loading").hidden = false;
+  const [lanes, local, external, capacity, clock] = hardwareFields.map(
+    (id) => +$(id).value,
+  );
+  try {
+    const r = await api("/api/hardware", {
+      config: {
+        lanes,
+        local_read_bytes_per_cycle: local,
+        external_bytes_per_cycle: external,
+        scratchpad_bytes: capacity * 1024,
+      },
+      clock_hz: clock * 1e6,
+    });
+    if (token !== state.hardwareRequest) return;
+    state.hardwareResult = r;
+    renderHardware();
+    $("hardware-results").hidden = false;
+  } catch (e) {
+    if (token !== state.hardwareRequest) return;
+    $("hardware-error").textContent = e.message;
+    $("hardware-error").hidden = false;
+  } finally {
+    if (token === state.hardwareRequest) $("hardware-loading").hidden = true;
+  }
+}
+function renderHardware() {
+  const r = state.hardwareResult;
+  const fp = r.results.fp32,
+    integer = r.results.int8;
+  $("hardware-metrics").replaceChildren(
+    ...[
+      [
+        "FP32 matrix-stage cycles",
+        fp.error ? "Unavailable" : fmt(fp.total_cycles),
+        "blue",
+      ],
+      [
+        "INT8 matrix-stage cycles",
+        integer.error ? "Unavailable" : fmt(integer.total_cycles),
+        "orange",
+      ],
+      [
+        "Matrix-stage speedup",
+        r.speedup ? fmt(r.speedup, 3) + "×" : "Unavailable",
+        "",
+      ],
+      ["Assumed clock", fmt(r.clock_hz / 1e6) + " MHz", ""],
+    ].map(([label, value, color]) => metric(label, value, color)),
+  );
+  const chart = $("cycle-chart");
+  chart.replaceChildren();
+  const max = Math.max(
+    ...[fp, integer].filter((x) => !x.error).map((x) => x.total_cycles),
+    1,
+  );
+  for (const [i, p, color, light] of [
+    [0, "fp32", "#287298", "#c7dfe9"],
+    [1, "int8", "#ad5934", "#f0d7c5"],
+  ]) {
+    const m = r.results[p];
+    const y = 35 + i * 100;
+    chart.append(
+      svgNode(
+        "text",
+        { x: 0, y: y, fill: color, "font-size": 16, "font-weight": 700 },
+        p.toUpperCase(),
+      ),
+    );
+    if (m.error) {
+      chart.append(
+        svgNode(
+          "text",
+          { x: 0, y: y + 28, fill: "#874926", "font-size": 12 },
+          "This configuration cannot run this format.",
+        ),
+      );
+      continue;
+    }
+    const scale = 480 / max;
+    chart.append(
+      svgNode("rect", {
+        x: 0,
+        y: y + 14,
+        width: m.compute_cycles * scale,
+        height: 34,
+        rx: 3,
+        fill: color,
+      }),
+    );
+    chart.append(
+      svgNode("rect", {
+        x: m.compute_cycles * scale,
+        y: y + 14,
+        width: m.transfer_cycles * scale,
+        height: 34,
+        fill: light,
+      }),
+    );
+    chart.append(
+      svgNode(
+        "text",
+        {
+          x: m.total_cycles * scale + 9,
+          y: y + 36,
+          fill: color,
+          "font-size": 15,
+          "font-weight": 700,
+        },
+        fmt(m.total_cycles),
+      ),
+    );
+    chart.append(
+      svgNode(
+        "text",
+        { x: 0, y: y + 69, fill: "#526e7d", "font-size": 12 },
+        `${fmt(m.compute_cycles)} compute + ${fmt(m.transfer_cycles)} transfer · ${fmt(m.latency_us, 2)} µs`,
+      ),
+    );
+  }
+  $("hardware-format-errors").replaceChildren(
+    ...["fp32", "int8"]
+      .filter((p) => r.results[p].error)
+      .map((p) => {
+        const d = document.createElement("p");
+        d.className = "error";
+        d.textContent = p.toUpperCase() + ": " + r.results[p].error;
+        return d;
+      }),
+  );
+  const needed = (p) => (784 + 784 * 64) * (p === "int8" ? 1 : 4) + 64 * 4;
+  $("memory-bars").replaceChildren(
+    ...["fp32", "int8"].map((p) => {
+      const m = document.createElement("div");
+      m.className = "memory-row";
+      const row = document.createElement("div");
+      const label = document.createElement("b");
+      label.textContent = p.toUpperCase();
+      label.className = p === "int8" ? "orange" : "blue";
+      const value = document.createElement("span");
+      value.textContent = fmt(needed(p) / 1024, 2) + " KiB needed";
+      row.append(label, value);
+      const track = document.createElement("div");
+      track.className = "memory-track";
+      const fill = document.createElement("div");
+      fill.className = "memory-fill";
+      fill.style.width =
+        Math.min(100, (needed(p) / r.config.scratchpad_bytes) * 100) + "%";
+      fill.style.background =
+        needed(p) > r.config.scratchpad_bytes
+          ? "#b75635"
+          : p === "int8"
+            ? "#ad5934"
+            : "#287298";
+      track.append(fill);
+      const info = document.createElement("small");
+      info.textContent = `${needed(p) > r.config.scratchpad_bytes ? "Does not fit" : "Fits"} in ${fmt(r.config.scratchpad_bytes / 1024)} KiB`;
+      m.append(row, track, info);
+      return m;
+    }),
+  );
+  $("supply-note").textContent =
+    `At ${r.config.local_read_bytes_per_cycle} local bytes/cycle, the connection can supply ${r.local_supply.int8} INT8 or ${r.local_supply.fp32} FP32 multiply-adds per cycle. You have ${r.config.lanes} lanes.`;
+  lineChart("lane-chart", r.lane_sweep, "Processing lanes");
+  lineChart(
+    "bandwidth-chart",
+    r.external_sweep,
+    "External transfer bytes/cycle",
+  );
+}
+function lineChart(id, rows, xLabel) {
+  const chart = $(id);
+  chart.replaceChildren();
+  const valid = rows.flatMap((row) =>
+    ["fp32", "int8"]
+      .filter((p) => !row[p].error)
+      .map((p) => row[p].stage_images_per_second / 1000),
+  );
+  const max = Math.max(1, Math.ceil(Math.max(0, ...valid) / 5) * 5);
+  const left = 48,
+    right = 625,
+    top = 15,
+    bottom = 235;
+  const minX = rows[0].value,
+    maxX = rows.at(-1).value;
+  const x = (v) => left + ((v - minX) / (maxX - minX)) * (right - left);
+  const y = (v) => bottom - (v / max) * (bottom - top);
+  for (let i = 0; i <= 4; i++) {
+    const v = (max * i) / 4;
+    chart.append(
+      svgNode("line", {
+        x1: left,
+        x2: right,
+        y1: y(v),
+        y2: y(v),
+        stroke: "#d6e5ec",
+      }),
+    );
+    chart.append(
+      svgNode(
+        "text",
+        {
+          x: 38,
+          y: y(v) + 4,
+          "text-anchor": "end",
+          fill: "#526e7d",
+          "font-size": 12,
+        },
+        fmt(v, 1),
+      ),
+    );
+  }
+  for (const row of rows)
+    chart.append(
+      svgNode(
+        "text",
+        {
+          x: x(row.value),
+          y: bottom + 23,
+          "text-anchor": "middle",
+          fill: "#526e7d",
+          "font-size": 12,
+        },
+        row.value,
+      ),
+    );
+  for (const [p, color] of [
+    ["fp32", "#287298"],
+    ["int8", "#ad5934"],
+  ]) {
+    const points = rows
+      .filter((row) => !row[p].error)
+      .map((row) => [x(row.value), y(row[p].stage_images_per_second / 1000)]);
+    if (points.length)
+      chart.append(
+        svgNode("polyline", {
+          points: points.map((a) => a.join(",")).join(" "),
+          fill: "none",
+          stroke: color,
+          "stroke-width": 3,
+        }),
+      );
+    for (const point of points)
+      chart.append(
+        svgNode("circle", { cx: point[0], cy: point[1], r: 4, fill: color }),
+      );
+  }
+  chart.append(
+    svgNode(
+      "text",
+      {
+        x: 335,
+        y: 282,
+        "text-anchor": "middle",
+        fill: "#526e7d",
+        "font-size": 12,
+      },
+      xLabel,
+    ),
+  );
+  if (!valid.length)
+    chart.append(
+      svgNode(
+        "text",
+        {
+          x: 335,
+          y: 115,
+          "text-anchor": "middle",
+          fill: "#874926",
+          "font-size": 14,
+        },
+        "Increase memory or bandwidth to run this experiment.",
+      ),
+    );
+}
+for (const id of hardwareFields)
+  $(id).onchange = () => {
+    document
+      .querySelectorAll("[data-hardware]")
+      .forEach((b) => b.classList.remove("selected"));
+    runHardware();
+  };
+document.querySelectorAll("[data-hardware]").forEach(
+  (b) =>
+    (b.onclick = () => {
+      hardwareFields.forEach(
+        (id, i) => ($(id).value = hardwarePresets[b.dataset.hardware][i]),
+      );
+      document
+        .querySelectorAll("[data-hardware]")
+        .forEach((x) => x.classList.toggle("selected", x === b));
+      runHardware();
+    }),
+);
+runHardware();
+
+// Guided scenes choose ordinary UI settings. The controls remain available for exploration.
+state.guideIndex = -1;
+state.guideToken = 0;
+async function guideToy(preset, local = 32, showCompute = false) {
+  selectView("accelerator");
+  $("toy-preset").value = preset;
+  $("toy-lanes").value = preset === "single" ? "1" : "8";
+  $("toy-local").value = local;
+  $("toy-external").value = "32";
+  state.precision = "int8";
+  document.querySelectorAll("[data-precision]").forEach((b) => {
+    b.classList.toggle("selected", b.dataset.precision === "int8");
+    b.setAttribute("aria-pressed", String(b.dataset.precision === "int8"));
+  });
+  await loadToy();
+  if (showCompute && state.run) {
+    state.position =
+      state.run.trace.findIndex((e) => e.phase === "compute") + 1;
+    renderToy();
+  }
+}
+async function guideDigit(id, stage) {
+  await metaReady;
+  if (!state.meta) throw Error("The example gallery could not load.");
+  selectView("digit");
+  $("gallery-filter").value = "all";
+  await selectExample(id);
+  state.digitStage = stage;
+  renderDigitStage();
+}
+async function guideHardware(preset) {
+  selectView("hardware");
+  hardwareFields.forEach((id, i) => ($(id).value = hardwarePresets[preset][i]));
+  document
+    .querySelectorAll("[data-hardware]")
+    .forEach((b) =>
+      b.classList.toggle("selected", b.dataset.hardware === preset),
+    );
+  await runHardware();
+}
+const guideScenes = [
+  {
+    title: "Start with a value and its scale.",
+    copy: "1.23 becomes integer 12 at scale 0.1. Reconstructing gives 1.2. The storage is smaller, with a small rounding difference.",
+    action: async () => {
+      selectView("numbers");
+      $("quant-value").value = 1.23;
+      $("quant-scale").value = 0.1;
+      await updateQuantization();
+    },
+  },
+  {
+    title: "Some values do not fit.",
+    copy: "200 is outside this INT8 range at scale 1, so it clips to 127. Point out that a wider accumulator also keeps products such as 127 × 127 from overflowing INT8.",
+    action: async () => {
+      selectView("numbers");
+      $("quant-value").value = 200;
+      $("quant-scale").value = 1;
+      await updateQuantization();
+    },
+  },
+  {
+    title: "Follow the six-cycle calculation.",
+    copy: "Press Play or Step: load inputs, load weights, perform three multiply-adds, and store 29. These are counted cycles in our proposed machine.",
+    action: () => guideToy("single"),
+  },
+  {
+    title: "Give the lanes independent outputs.",
+    copy: "All eight outputs equal 29. With enough local reads, eight lanes can work together. Each lane owns an output dot product.",
+    action: () => guideToy("parallel", 32, true),
+  },
+  {
+    title: "Keep the lanes, narrow the connection.",
+    copy: "Only four INT8 operand pairs fit through eight local bytes per cycle. Four lanes work and four wait. Waiting lanes still have assigned work.",
+    action: () => guideToy("parallel", 8, true),
+  },
+  {
+    title: "Now follow a real handwritten digit.",
+    copy: "This is an actual MNIST image. Click a pixel to see the original byte, normalized FP32 value, and stored INT8 representation. The model was trained beforehand.",
+    action: () => guideDigit(0, "pixels"),
+  },
+  {
+    title: "Inspect the computed hidden values.",
+    copy: "The first matrix creates 64 totals. Learned biases, ReLU, and integer rescaling produce these hidden values. Those operations are computed but remain outside the cycle estimate.",
+    action: () => guideDigit(0, "hidden"),
+  },
+  {
+    title: "Read the ten final scores.",
+    copy: "The second matrix produces the digit scores. The maximum chooses the prediction. INT8 uses its raw INT32 scores; the chart converts units only to make the comparison readable.",
+    action: () => guideDigit(0, "scores"),
+  },
+  {
+    title: "A wrong guess can still be a correct calculation.",
+    copy: "The known digit is 5, but both models predict 6. The independent arithmetic checks still pass. Classification accuracy and simulator correctness answer different questions.",
+    action: () => guideDigit(8, "scores"),
+  },
+  {
+    title: "Quantization can change a prediction.",
+    copy: "Here FP32 and INT8 choose different digits. The gallery includes all 15 disagreements; the saved accuracy below comes from all 10,000 test images.",
+    action: async () => {
+      await metaReady;
+      await guideDigit(
+        state.meta.examples.find((e) => e.disagreement).id,
+        "scores",
+      );
+    },
+  },
+  {
+    title: "Connect the demonstration to our reported result.",
+    copy: "At eight lanes and 32-byte connections, the matrix stages take 19,204 FP32 cycles versus 8,025 INT8 cycles. The 2.393× ratio applies to these matrix stages.",
+    action: () => guideHardware("baseline"),
+  },
+  {
+    title: "Extra arithmetic hardware can sit idle.",
+    copy: "The local connection supplies at most 16 INT8 multiply-adds per cycle. The lane curve therefore stops improving between 16 and 32 lanes. External transfers are a separate limit.",
+    action: () => guideHardware("extra"),
+  },
+  {
+    title: "Capacity is different from bandwidth.",
+    copy: "With a 64 KiB buffer, the INT8 layer fits and the FP32 layer does not. Our model rejects that FP32 configuration because tiling is not implemented. Restore Baseline when finished.",
+    action: () => guideHardware("capacity"),
+  },
+];
+async function guideGo(index) {
+  if (index >= guideScenes.length) {
+    closeGuide();
+    return;
+  }
+  pause();
+  state.guideIndex = Math.max(0, index);
+  const token = ++state.guideToken;
+  const scene = guideScenes[state.guideIndex];
+  $("guide-panel").hidden = false;
+  $("guide-count").textContent =
+    `GUIDED TOUR · ${state.guideIndex + 1} OF ${guideScenes.length}`;
+  $("guide-title").textContent = scene.title;
+  $("guide-copy").textContent = scene.copy;
+  $("guide-next").disabled = $("guide-back").disabled = true;
+  $("start-guide").textContent = "Restart tour";
+  try {
+    await scene.action();
+  } catch (e) {
+    $("guide-copy").textContent = e.message;
+  } finally {
+    if (token === state.guideToken) {
+      $("guide-next").disabled = false;
+      $("guide-back").disabled = state.guideIndex === 0;
+      $("guide-next").textContent =
+        state.guideIndex === guideScenes.length - 1 ? "Finish" : "Next →";
+      $("guide-panel").scrollIntoView({ block: "start", behavior: "smooth" });
+    }
+  }
+}
+function closeGuide() {
+  pause();
+  state.guideToken++;
+  state.guideIndex = -1;
+  $("guide-panel").hidden = true;
+  $("start-guide").textContent = "Start guided tour";
+}
+$("start-guide").onclick = () => guideGo(0);
+$("guide-next").onclick = () => guideGo(state.guideIndex + 1);
+$("guide-back").onclick = () => guideGo(state.guideIndex - 1);
+$("guide-close").onclick = closeGuide;
+$("fullscreen").onclick = async () => {
+  try {
+    if (document.fullscreenElement) await document.exitFullscreen();
+    else await document.documentElement.requestFullscreen();
+  } catch (e) {
+    $("fullscreen").textContent = "Use browser full screen (F11)";
+  }
+};
+document.addEventListener("fullscreenchange", () => {
+  $("fullscreen").textContent = document.fullscreenElement
+    ? "Exit full screen"
+    : "Full screen";
+});
