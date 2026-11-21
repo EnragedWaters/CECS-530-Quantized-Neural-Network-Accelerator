@@ -7,6 +7,7 @@ __pycache__/
 .ipynb_checkpoints/
 *.py[cod]
 .venv/
+.demo-venv/
 
 # Downloaded dataset files
 /workloads/mnist/data/*.gz
