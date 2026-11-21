@@ -37,6 +37,25 @@ def check(url, screenshots=None):
         page = context.new_page()
         page.on("pageerror", lambda error: errors.append(str(error)))
         page.goto(url, wait_until="networkidle")
+        expect(page.locator("#welcome")).to_be_visible()
+        page.locator("#start-learning").click()
+        expect(page.locator("#lesson-action")).to_have_text("Convert 1.23")
+        expect(page.locator("#lesson-result")).to_be_hidden()
+        page.locator("#lesson-action").click()
+        expect(page.locator("#lesson-result")).to_contain_text("0.03")
+        page.set_viewport_size({"width": 1280, "height": 720})
+        assert page.evaluate(
+            "document.documentElement.scrollHeight <= innerHeight"
+        ), "Lesson requires scrolling"
+        if screenshots:
+            page.screenshot(path=str(screenshots / "first-learning-lesson.png"))
+        page.locator("#explore-toggle").click()
+        expect(
+            page.frame_locator("#explore-frame").locator("#toy-stage")
+        ).to_be_visible()
+        page.locator("#explore-toggle").click()
+        expect(page.locator("#lesson-result")).to_contain_text("0.03")
+        page.goto(url + "/explore", wait_until="networkidle")
         expect(page.locator("#toy-stage")).to_be_visible()
         expect(page.locator("#toy-total")).to_have_text("6")
         page.locator("#step").click()
@@ -131,25 +150,6 @@ def check(url, screenshots=None):
         expect(page.locator("#hardware-metrics")).to_contain_text("2.393×")
         if screenshots:
             page.screenshot(path=str(screenshots / "hardware.png"), full_page=True)
-        # The full guided route exercises its asynchronous actions and narration.
-        page.locator("#fullscreen").click()
-        page.wait_for_function("document.fullscreenElement !== null")
-        page.locator("#fullscreen").click()
-        page.wait_for_function("document.fullscreenElement === null")
-        page.locator("#start-guide").click()
-        expect(page.locator("#guide-panel")).to_be_visible()
-        expect(page.locator("#guide-next")).to_be_enabled()
-        page.locator("#guide-next").click()
-        expect(page.locator("#guide-count")).to_have_text("GUIDED TOUR · 2 OF 13")
-        expect(page.locator("#guide-back")).to_be_enabled()
-        page.locator("#guide-back").click()
-        for index in range(13):
-            expect(page.locator("#guide-count")).to_have_text(
-                f"GUIDED TOUR · {index+1} OF 13"
-            )
-            expect(page.locator("#guide-next")).to_be_enabled(timeout=15000)
-            page.locator("#guide-next").click()
-        expect(page.locator("#guide-panel")).to_be_hidden()
         # Layout must remain readable without horizontal page scrolling.
         for width, height in [(1280, 720), (390, 844)]:
             page.set_viewport_size({"width": width, "height": height})

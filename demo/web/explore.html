@@ -1,0 +1,723 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Inside our accelerator · CECS 530</title>
+    <link rel="stylesheet" href="/styles.css" />
+    <script defer src="/app.js"></script>
+  </head>
+  <body>
+    <header class="topbar">
+      <a class="brand" href="/" aria-label="Demo home"
+        ><svg width="38" height="30" viewBox="0 0 38 30" aria-hidden="true">
+          <path
+            d="M2 7Q10 0 19 7T36 7M2 16Q10 9 19 16T36 16M2 25Q10 18 19 25T36 25"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="3"
+          /></svg
+        ><span
+          >CECS 530 <small>Quantized neural network accelerator</small></span
+        ></a
+      >
+    </header>
+    <main>
+      <h1 class="explore-title">Explore the model</h1>
+      <nav class="tabs" aria-label="Walkthrough sections">
+        <button data-view="numbers">1 <span>Small numbers</span></button
+        ><button data-view="accelerator" class="selected" aria-current="page">
+          2 <span>Inside the accelerator</span></button
+        ><button data-view="digit">3 <span>A real digit</span></button
+        ><button data-view="hardware">4 <span>Hardware limits</span></button>
+      </nav>
+      <section id="accelerator-view" class="view">
+        <div class="view-heading">
+          <div>
+            <p class="eyebrow">WATCH THE WORK</p>
+            <h2>One answer, one clock cycle at a time.</h2>
+          </div>
+          <p class="view-intro">
+            A lane multiplies two values and adds the result to a running total.
+          </p>
+        </div>
+        <div class="two-column">
+          <div class="panel simulation">
+            <div class="toolbar">
+              <label
+                >Example<select id="toy-preset">
+                  <option value="single">One answer: 29</option>
+                  <option value="parallel">Eight answers in parallel</option>
+                  <option value="tail">
+                    Ten outputs: a partially filled group
+                  </option>
+                </select></label
+              >
+              <div class="segmented" aria-label="Operand precision">
+                <button
+                  data-precision="int8"
+                  class="selected"
+                  aria-pressed="true"
+                >
+                  INT8</button
+                ><button data-precision="fp32" aria-pressed="false">
+                  FP32
+                </button>
+              </div>
+            </div>
+            <div class="compact-controls">
+              <label
+                >Processing lanes<select id="toy-lanes">
+                  <option>1</option>
+                  <option>4</option>
+                  <option>8</option>
+                  <option>16</option>
+                  <option>32</option>
+                </select></label
+              ><label
+                >Local reads <small>bytes/cycle</small
+                ><select id="toy-local">
+                  <option>2</option>
+                  <option>8</option>
+                  <option>16</option>
+                  <option selected>32</option>
+                  <option>64</option>
+                </select></label
+              ><label
+                >External transfers <small>bytes/cycle</small
+                ><select id="toy-external">
+                  <option>1</option>
+                  <option>4</option>
+                  <option>8</option>
+                  <option selected>32</option>
+                  <option>64</option>
+                </select></label
+              >
+            </div>
+            <div id="toy-error" class="error" role="alert" hidden></div>
+            <div id="toy-stage">
+              <svg
+                class="machine"
+                viewBox="0 0 760 134"
+                role="img"
+                aria-label="External memory connects to a local buffer, which feeds the processing lanes"
+              >
+                <defs>
+                  <marker
+                    id="arrowhead"
+                    viewBox="0 0 10 10"
+                    refX="7"
+                    refY="5"
+                    markerWidth="5"
+                    markerHeight="5"
+                    orient="auto-start-reverse"
+                  >
+                    <path d="M0 0L10 5L0 10z" fill="currentColor" />
+                  </marker>
+                </defs>
+                <path
+                  id="external-path"
+                  class="connection"
+                  d="M185 65H278"
+                  marker-start="url(#arrowhead)"
+                  marker-end="url(#arrowhead)"
+                />
+                <path
+                  id="local-path"
+                  class="connection"
+                  d="M472 65H563"
+                  marker-start="url(#arrowhead)"
+                  marker-end="url(#arrowhead)"
+                />
+                <rect
+                  class="machine-node"
+                  x="10"
+                  y="15"
+                  width="175"
+                  height="100"
+                  rx="16"
+                />
+                <rect
+                  class="machine-node buffer-node"
+                  x="278"
+                  y="15"
+                  width="194"
+                  height="100"
+                  rx="16"
+                />
+                <rect
+                  class="machine-node lane-node"
+                  x="563"
+                  y="15"
+                  width="187"
+                  height="100"
+                  rx="16"
+                />
+                <text x="98" y="51">External memory</text>
+                <text class="machine-small" x="98" y="80">
+                  inputs &amp; weights
+                </text>
+                <text x="375" y="51">Local buffer</text>
+                <text class="machine-small" id="buffer-caption" x="375" y="80">
+                  values close to the lanes
+                </text>
+                <text x="656" y="51">Processing lanes</text>
+                <text
+                  class="machine-small"
+                  id="machine-lane-caption"
+                  x="656"
+                  y="80"
+                >
+                  one multiply-add per lane
+                </text>
+              </svg>
+              <div class="phase-heading">
+                <span id="phase-pill" class="pill">Ready to start</span
+                ><span id="cycle-label">Cycle 0 of 6</span>
+              </div>
+              <div
+                id="phase-timeline"
+                class="timeline"
+                aria-label="Execution phases"
+              ></div>
+              <div id="lane-grid" class="lane-grid"></div>
+              <div class="legend">
+                <span><i class="working"></i>Working now</span
+                ><span><i class="waiting"></i>Waiting for data</span
+                ><span><i class="unused"></i>No assigned work</span>
+              </div>
+              <p id="event-explanation" class="event-note" aria-live="polite">
+                Press Step to load the input values.
+              </p>
+              <div class="playback">
+                <button id="play" class="primary">▶ Play</button
+                ><button id="step">Step →</button
+                ><button id="reset">Reset</button
+                ><label
+                  >Playback<select id="playback-speed">
+                    <option value="1200">Slow</option>
+                    <option value="650" selected>Normal</option>
+                    <option value="200">Fast</option>
+                  </select></label
+                >
+              </div>
+              <label class="scrub-label"
+                >Jump to a cycle<input
+                  id="trace-position"
+                  type="range"
+                  min="0"
+                  max="6"
+                  value="0"
+              /></label>
+              <p class="small-note">
+                Animation slows the recorded simulation so we can follow it. It
+                does not measure your computer’s speed.
+              </p>
+            </div>
+          </div>
+          <aside class="lesson">
+            <p class="eyebrow">THE IDEA</p>
+            <h3 id="toy-lesson-title">Where does 29 come from?</h3>
+            <div id="toy-equation" class="equation">
+              2 × 4 + 3 × 5 + 1 × 6 <strong>= 29</strong>
+            </div>
+            <p id="toy-lesson">
+              First move the values into the local buffer. Then one lane
+              performs three multiply-adds. Finally, store the answer.
+            </p>
+            <div class="stat-pair">
+              <div>
+                <strong id="toy-total">6</strong><span>modeled cycles</span>
+              </div>
+              <div>
+                <strong id="toy-answer">29</strong
+                ><span>answer per output</span>
+              </div>
+            </div>
+            <details>
+              <summary>What is included?</summary>
+              <p>
+                Load inputs, load weights, perform matrix calculations, and
+                store 32-bit outputs. Bias, activation and rescaling are
+                separate steps in the digit view.
+              </p>
+            </details>
+            <details>
+              <summary>Keyboard controls</summary>
+              <p>
+                With focus outside a button or input: Space plays or pauses, and
+                the left/right arrows move one cycle. The guided tour uses its
+                own Back and Next buttons.
+              </p>
+            </details>
+            <div class="tip">
+              Try <b>Eight answers in parallel</b>, then reduce local reads.
+              Some lanes must wait even though they have work.
+            </div>
+          </aside>
+        </div>
+      </section>
+      <section id="numbers-view" class="view" hidden>
+        <div class="view-heading">
+          <div>
+            <p class="eyebrow">UNDERSTAND THE REPRESENTATION</p>
+            <h2>Smaller numbers keep less detail.</h2>
+          </div>
+          <p class="view-intro">
+            An integer and a scale work together to represent a value.
+          </p>
+        </div>
+        <div class="panel">
+          <div class="number-controls">
+            <label
+              >Original value<input
+                id="quant-value"
+                type="number"
+                min="-1000"
+                max="1000"
+                step="0.01"
+                value="1.23" /></label
+            ><label
+              >Scale <small>value represented by one integer step</small
+              ><input
+                id="quant-scale"
+                type="number"
+                min="0.0001"
+                max="10"
+                step="0.01"
+                value="0.1" /></label
+            ><button id="round-example">Try rounding</button
+            ><button id="clip-example">Try clipping</button
+            ><button id="tie-example">Try a halfway value</button>
+          </div>
+          <div id="quant-error" class="error" role="alert" hidden></div>
+          <div id="quant-result">
+            <div class="number-flow">
+              <div>
+                <span>Original value</span
+                ><strong id="quant-original">1.23</strong
+                ><small>represented with FP32</small>
+              </div>
+              <b>÷ scale</b>
+              <div>
+                <span>Integer steps</span><strong id="quant-scaled">12.3</strong
+                ><small>round, then stay within range</small>
+              </div>
+              <b>store</b>
+              <div class="highlight">
+                <span>Stored INT8</span><strong id="quant-stored">12</strong
+                ><small>one byte per operand</small>
+              </div>
+              <b>× scale</b>
+              <div>
+                <span>Reconstructed value</span
+                ><strong id="quant-reconstructed">1.2</strong
+                ><small id="quant-loss">0.03 difference</small>
+              </div>
+            </div>
+            <div class="number-line">
+              <span>−127</span>
+              <div><i id="quant-marker"></i></div>
+              <span>127</span>
+            </div>
+            <p id="quant-explanation" class="event-note" aria-live="polite"></p>
+            <p class="small-note">
+              This teaching example changes its own scale. The digit model’s
+              calibrated scale stays fixed.
+            </p>
+          </div>
+        </div>
+        <div class="explanation-grid">
+          <article class="panel">
+            <p class="eyebrow">SMALL OPERANDS, WIDE TOTALS</p>
+            <h3>Why not keep the answer in INT8?</h3>
+            <div class="big-equation">
+              127 × 127 = <strong id="wide-product">16,129</strong>
+            </div>
+            <p>
+              Even one product is too large for INT8. A dot product adds many of
+              them, so our machine uses a checked INT32 running total.
+            </p>
+            <div class="range-note">
+              <b>INT8 operands</b> −128 to 127<br /><b>INT32 totals</b>
+              −2,147,483,648 to 2,147,483,647
+            </div>
+            <p class="small-note">
+              Our weight quantizer uses the symmetric subset −127 to 127.
+            </p>
+          </article>
+          <article class="panel">
+            <p class="eyebrow">KEEP THE UNITS CONSISTENT</p>
+            <h3>A bias is added in the product’s units.</h3>
+            <div class="bias-flow">
+              <div><strong>20</strong><span>× 0.01 = 0.20</span></div>
+              <b>+ 4</b>
+              <div>
+                <strong id="bias-total">24</strong><span>× 0.01 = 0.24</span>
+              </div>
+              <b>÷ 4</b>
+              <div>
+                <strong id="bias-rescaled">6</strong><span>× 0.04 = 0.24</span>
+              </div>
+            </div>
+            <p>
+              A learned bias of 0.04 becomes integer 4 at scale 0.01. Rescaling
+              changes the integer to match the next layer’s units. Both final
+              representations mean 0.24.
+            </p>
+            <p class="small-note">
+              These are illustrative values. The actual network uses its fixed
+              calibrated scale and an integer multiplier and shift.
+            </p>
+          </article>
+        </div>
+        <div id="training-splits" class="panel preparation">
+          <p class="eyebrow">PREPARE ONCE, THEN PREDICT</p>
+          <h3>The model is already trained.</h3>
+          <div class="split-flow">
+            <div>
+              <strong>54,000</strong
+              ><span>training images<br />learn weights and biases</span>
+            </div>
+            <div>
+              <strong>5,000</strong
+              ><span>validation images<br />monitor training</span>
+            </div>
+            <div>
+              <strong>1,000</strong
+              ><span>calibration images<br />choose a hidden scale</span>
+            </div>
+            <div>
+              <strong>10,000</strong
+              ><span>separate test images<br />measure final accuracy</span>
+            </div>
+          </div>
+          <p>
+            The live demo uses the verified weights and fixed scales. It does
+            not learn from the examples you select.
+          </p>
+        </div>
+      </section>
+      <section id="digit-view" class="view" hidden>
+        <div class="view-heading">
+          <div>
+            <p class="eyebrow">FROM PIXELS TO A PREDICTION</p>
+            <h2>A real image. Two numerical paths.</h2>
+          </div>
+          <p class="view-intro">
+            The verified network has 784 inputs, 64 hidden values and ten digit
+            scores.
+          </p>
+        </div>
+        <div class="digit-layout">
+          <aside class="panel gallery-panel">
+            <label
+              >Choose an example<select id="gallery-filter">
+                <option value="all">All 31 examples</option>
+                <option value="correct">Both models correct</option>
+                <option value="mistake">At least one mistake</option>
+                <option value="different">FP32 and INT8 disagree</option>
+              </select></label
+            >
+            <div
+              id="digit-gallery"
+              class="digit-gallery"
+              aria-label="MNIST example gallery"
+            ></div>
+            <p class="small-note">
+              Includes the first 16 verified images and all 15 disagreements
+              from the original test. This gallery is not an accuracy sample.
+            </p>
+          </aside>
+          <div>
+            <div class="panel">
+              <div class="selected-digit">
+                <canvas
+                  id="selected-digit"
+                  width="28"
+                  height="28"
+                  aria-label="Selected MNIST image"
+                ></canvas>
+                <div>
+                  <p class="eyebrow" id="selected-example">MNIST image 0</p>
+                  <h3 id="known-digit">Known digit: 7</h3>
+                  <p>The weights and calibrated scales stay fixed.</p>
+                </div>
+                <button id="run-digit" class="primary">Run both models</button>
+              </div>
+              <div id="digit-error" class="error" role="alert" hidden></div>
+              <p id="digit-loading" class="event-note" hidden>
+                Running both matrix stages through the simulator…
+              </p>
+              <div id="digit-result" hidden>
+                <div class="prediction-row">
+                  <div class="prediction fp32">
+                    <span>FP32 prediction</span
+                    ><strong id="fp-prediction"></strong
+                    ><small id="fp-correct"></small>
+                  </div>
+                  <div class="prediction int8">
+                    <span>INT8 prediction</span
+                    ><strong id="int-prediction"></strong
+                    ><small id="int-correct"></small>
+                  </div>
+                  <div class="verification-note" id="digit-verification"></div>
+                </div>
+                <div class="pipeline" aria-label="Inspect the prediction steps">
+                  <button data-stage="pixels" class="selected">
+                    1 · Pixels</button
+                  ><button data-stage="first">2 · First matrix</button
+                  ><button data-stage="hidden">3 · Hidden values</button
+                  ><button data-stage="second">4 · Second matrix</button
+                  ><button data-stage="scores">5 · Digit scores</button>
+                </div>
+                <div class="stage-description">
+                  <span id="stage-badge" class="pill"></span>
+                  <h3 id="stage-title"></h3>
+                  <p id="stage-copy"></p>
+                </div>
+                <div id="pixel-inspection" class="pixel-inspection">
+                  <div>
+                    <canvas
+                      id="pixel-map"
+                      width="28"
+                      height="28"
+                      aria-label="Pixel values; choose one to inspect"
+                    ></canvas
+                    ><small>Click a pixel to inspect its values.</small>
+                  </div>
+                  <div>
+                    <p class="eyebrow">ONE PIXEL, TWO REPRESENTATIONS</p>
+                    <div id="pixel-details" class="pixel-details"></div>
+                    <p class="small-note">
+                      Divide the stored image byte by 255 for FP32. INT8
+                      represents it in steps of 1/127.
+                    </p>
+                  </div>
+                </div>
+                <div id="hidden-inspection" hidden>
+                  <div class="heatmap-title">
+                    <span>FP32 hidden values</span
+                    ><span>INT8 hidden values</span>
+                  </div>
+                  <div class="hidden-pair">
+                    <div id="hidden-fp" class="hidden-grid"></div>
+                    <div id="hidden-int" class="hidden-grid"></div>
+                  </div>
+                  <p class="small-note" id="hidden-note"></p>
+                </div>
+                <div id="stage-metrics" class="metric-grid" hidden></div>
+                <div id="score-inspection" hidden>
+                  <div class="legend">
+                    <span class="blue">● FP32</span
+                    ><span class="orange"
+                      >● INT8 in comparable display units</span
+                    >
+                  </div>
+                  <svg
+                    id="score-chart"
+                    viewBox="0 0 700 345"
+                    role="img"
+                    aria-label="Ten output scores for FP32 and INT8"
+                  ></svg>
+                  <p class="small-note">
+                    These are scores, not confidence percentages. INT8 picks its
+                    maximum using raw INT32 scores; conversion here is only for
+                    comparison.
+                  </p>
+                  <details>
+                    <summary>See the raw INT32 digit scores</summary>
+                    <p id="raw-scores" class="mono"></p>
+                  </details>
+                </div>
+                <p class="small-note" id="live-timing-note"></p>
+              </div>
+            </div>
+            <div class="panel saved-results">
+              <p class="eyebrow">SAVED FULL-TEST RESULT · 10,000 IMAGES</p>
+              <div class="stat-pair">
+                <div>
+                  <strong class="blue" id="saved-fp-accuracy">96.96%</strong
+                  ><span>FP32 accuracy</span>
+                </div>
+                <div>
+                  <strong class="orange" id="saved-int-accuracy">96.98%</strong
+                  ><span>INT8 accuracy</span>
+                </div>
+              </div>
+              <p>
+                These are the published full-test counts, not an accuracy
+                estimate from clicking through this gallery. Fifteen predictions
+                changed; INT8 was correct on two more images overall.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+      <section id="hardware-view" class="view" hidden>
+        <div class="view-heading">
+          <div>
+            <p class="eyebrow">CHANGE THE MACHINE</p>
+            <h2>More lanes need more data.</h2>
+          </div>
+          <p class="view-intro">
+            Compare the same two matrix stages under matching hardware
+            assumptions.
+          </p>
+        </div>
+        <div class="panel">
+          <div class="presets" aria-label="Hardware presets">
+            <button data-hardware="baseline" class="selected">Baseline</button
+            ><button data-hardware="starved">Starved lanes</button
+            ><button data-hardware="extra">Extra lanes</button
+            ><button data-hardware="capacity">Too little memory</button>
+          </div>
+          <div class="hardware-controls">
+            <label
+              >Processing lanes<select id="hardware-lanes">
+                <option>1</option>
+                <option>4</option>
+                <option selected>8</option>
+                <option>16</option>
+                <option>32</option>
+              </select></label
+            ><label
+              >Local reads <small>bytes/cycle</small
+              ><select id="hardware-local">
+                <option>2</option>
+                <option>8</option>
+                <option>16</option>
+                <option selected>32</option>
+                <option>64</option>
+                <option>128</option>
+              </select></label
+            ><label
+              >External transfers <small>bytes/cycle</small
+              ><select id="hardware-external">
+                <option>8</option>
+                <option>16</option>
+                <option selected>32</option>
+                <option>64</option>
+                <option>128</option>
+              </select></label
+            ><label
+              >Local buffer <small>KiB</small
+              ><select id="hardware-capacity">
+                <option>32</option>
+                <option>64</option>
+                <option>128</option>
+                <option selected>256</option>
+                <option>512</option>
+              </select></label
+            ><label
+              >Assumed clock <small>MHz</small
+              ><select id="hardware-clock">
+                <option>50</option>
+                <option selected>100</option>
+                <option>200</option>
+              </select></label
+            >
+          </div>
+          <p class="small-note">
+            The clock converts counted cycles to estimated time. It is a
+            modeling assumption, not a measured chip frequency.
+          </p>
+        </div>
+        <p id="hardware-loading" class="event-note" hidden>
+          Recomputing the matrix-stage experiments…
+        </p>
+        <div id="hardware-error" class="error" role="alert" hidden></div>
+        <div id="hardware-results" hidden>
+          <div id="hardware-metrics" class="metric-grid"></div>
+          <div class="hardware-pair">
+            <article class="panel">
+              <div class="chart-heading">
+                <h3>Where the cycles go</h3>
+                <span class="pill">Two matrix stages</span>
+              </div>
+              <svg
+                id="cycle-chart"
+                viewBox="0 0 650 230"
+                role="img"
+                aria-label="Compute and transfer cycle comparison"
+              ></svg>
+              <div class="legend">
+                <span>Dark segment: compute</span
+                ><span>Light segment: external transfers</span>
+              </div>
+              <div id="hardware-format-errors" role="status"></div>
+            </article>
+            <article class="panel">
+              <h3>Does the whole layer fit?</h3>
+              <div id="memory-bars"></div>
+              <p id="supply-note" class="event-note"></p>
+              <p class="small-note">
+                Capacity is how much fits. Bandwidth is how quickly data moves.
+                This model requires the whole matrix stage to fit; it has no
+                tiling.
+              </p>
+            </article>
+          </div>
+          <div class="hardware-pair">
+            <article class="panel">
+              <h3>Add processing lanes</h3>
+              <p class="chart-subtitle">
+                Matrix-stage rate · thousand images/s
+              </p>
+              <svg
+                id="lane-chart"
+                viewBox="0 0 650 290"
+                role="img"
+                aria-label="Matrix-stage rate versus processing lanes"
+              ></svg>
+              <p class="small-note">
+                Local and external bandwidths use your settings. Extra lanes can
+                stop helping when the local read connection is full.
+              </p>
+            </article>
+            <article class="panel">
+              <h3>Speed up external transfers</h3>
+              <p class="chart-subtitle">
+                Matrix-stage rate · thousand images/s
+              </p>
+              <svg
+                id="bandwidth-chart"
+                viewBox="0 0 650 290"
+                role="img"
+                aria-label="Matrix-stage rate versus external bytes per cycle"
+              ></svg>
+              <p class="small-note">
+                This sweep holds 32 lanes fixed and uses your local read
+                bandwidth. Faster loading and storing does not widen the
+                separate local read connection.
+              </p>
+            </article>
+          </div>
+          <div class="legend chart-key">
+            <span class="blue">● FP32</span><span class="orange">● INT8</span>
+          </div>
+          <details class="panel">
+            <summary>How to interpret these estimates</summary>
+            <p>
+              These are the cycles for one image’s two matrix stages, including
+              their input, weight and output transfers. Bias, activation,
+              rescaling and digit selection are calculated elsewhere and are not
+              included in the time here. Matrix traffic excludes bias and scale
+              metadata.
+            </p>
+            <p>
+              The simulator counts an explicit schedule with no zero-skipping.
+              The fixed-dimension sweeps therefore have the same cycle counts as
+              the real-image checks. Equal clock and lane counts do not
+              establish equal physical area, energy or achievable frequency.
+            </p>
+          </details>
+        </div>
+      </section>
+      <footer>
+        A high-level software model of proposed hardware · FP32 and INT8 use the
+        same scheduling rules.
+      </footer>
+    </main>
+  </body>
+</html>
