@@ -160,7 +160,10 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Cache-Control", "no-store")
         self.send_header("X-Content-Type-Options", "nosniff")
         self.end_headers()
-        self.wfile.write(body)
+        try:
+            self.wfile.write(body)
+        except (BrokenPipeError, ConnectionResetError):
+            pass  # A browser can leave a view while its calculation finishes.
 
     def do_GET(self):
         path = urlsplit(self.path).path
@@ -169,6 +172,10 @@ class Handler(BaseHTTPRequestHandler):
             return
         files = {
             "/": ("index.html", "text/html; charset=utf-8"),
+            "/explore": ("explore.html", "text/html; charset=utf-8"),
+            "/learning.js": ("learning.js", "text/javascript; charset=utf-8"),
+            "/lessons.js": ("lessons.js", "text/javascript; charset=utf-8"),
+            "/learning.css": ("learning.css", "text/css; charset=utf-8"),
             "/app.js": ("app.js", "text/javascript; charset=utf-8"),
             "/styles.css": ("styles.css", "text/css; charset=utf-8"),
         }

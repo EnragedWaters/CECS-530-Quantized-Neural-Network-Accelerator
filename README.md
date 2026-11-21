@@ -16,8 +16,8 @@ Linux/WSL can run `sh "ONE-CLICK-LAUNCHERS/Launch Demo.command"` from this repo.
 
 Python 3.10–3.14 is needed (3.12 recommended). The launcher handles NumPy setup
 and opens the browser. First setup needs internet; later runs work offline.
-Select **Start guided tour** to follow numbers, processing lanes, real digit
-predictions, and memory limits. See the [demo guide](demo/README.md) for presenting
+Select **Start demo** for six short visual stops that accompany the PowerPoint.
+Use **Steps** to jump to a topic and **Explore** for the full controls. See the [demo guide](demo/README.md) for presenting
 and troubleshooting. Keep the downloaded repo together and extract ZIPs first.
 
 The app, examples, and checks are in `demo/`. Submitted files remain in `report/`

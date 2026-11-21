@@ -18,7 +18,8 @@ The first launch creates a private Python environment and installs NumPy.
 the bundled model and images. No Colab, training, Git, Node, or dataset download
 is needed to present.
 
-The browser opens automatically. Select **Start guided tour**, then **Next →**.
+The browser opens automatically. Select **Start demo**, then press the highlighted action button.
+There are six short stops; **Steps** jumps to a topic during the PowerPoint.
 Keep the terminal window open while presenting. Press **Ctrl+C** there to stop.
 If the browser does not open, copy the printed `http://127.0.0.1:...` address.
 The launcher chooses an available port each time.

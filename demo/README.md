@@ -6,28 +6,39 @@ numbers, proposed hardware, digit predictions, and memory limits in one place.
 **[Start with the launchers](../ONE-CLICK-LAUNCHERS/README.md).** They handle setup
 and open a local browser page on Windows, macOS, Linux, or WSL.
 
-![Accelerator view showing a calculation across processing lanes](images/accelerator.png)
+![Four lanes working and four waiting for data](images/accelerator.png)
 
-## Presentation route
+## Use alongside the PowerPoint
 
-Select **Start guided tour** for 13 short scenes. **Next →** sets up each example;
-**Back** revisits it. The tour can be closed at any time to explore freely.
+Select **Start demo** for six short visual stops. The highlighted button names the
+next action; the result explains what changed. **Next step** moves on. **Back**
+revisits a stop, and **Replay step** starts its actions again.
 
-| View | What to show | Main point |
+| Stop | Buttons to press | What it shows |
 |---|---|---|
-| Small numbers | Rounding, clipping, wide totals, bias, rescaling | Smaller numbers save storage but change how values are represented. INT8 products need INT32 totals. |
-| Inside the accelerator | Step through the six-cycle example, then eight parallel answers | Lanes do multiply-adds; moving data also takes cycles. Narrow local reads leave lanes waiting. |
-| A real digit | Inspect a pixel, hidden values, and ten scores | Both versions run the trained 784 → 64 → 10 network through our simulator. The biggest score chooses the digit. |
-| Hardware limits | Baseline, more lanes, narrow connections, small buffer | Extra lanes help only when memory can feed them. Capacity and bandwidth are different limits. |
+| 1 · Smaller numbers | **Convert 1.23** | Rounding stores 12 at scale 0.1 and reconstructs 1.2. |
+| 2 · Clock cycles | **Next clock cycle**, six times | Load inputs, load weights, three multiply-adds, and store 29. |
+| 3 · Working/waiting lanes | **Run eight lanes**, then **Narrow the local connection** | Four lanes wait when local reads cannot feed all eight. |
+| 4 · One real image | **Inspect this pixel** → **Show the first-layer calculation** → **Prepare the hidden values** → **Show the ten scores** → **Highlight the largest score** | Follow the trained network before revealing its prediction. |
+| 5 · Performance | **Compare FP32 and INT8** | Matched matrix-stage cycles and their compute/transfer breakdown. |
+| 6 · Memory fit | **Use a 64 KiB buffer** | INT8 fits; FP32 does not fit this untiled model. |
 
-For a four-minute version: rounding → six-cycle example → parallel answers with
-8 local bytes/cycle → a real digit's scores → hardware Baseline and Small buffer.
-For a longer explanation, use every scene and pause for questions.
+Use **Steps** to jump to a topic when it supports the current slide. For a short
+presentation insert, use stop 2 with slide 7 (six clock cycles) and stop 3 with
+slide 11 (lanes waiting for data). Stop 4 supports slide 8's real-value checks;
+stop 5 supports slide 10's cost comparison. These are visual pauses within the
+existing talk. Budget their time during rehearsal; running every stop is optional.
+The PowerPoint and its submitted speaker notes are unchanged.
 
-**Play, Step, Reset, speed, and the cycle slider** control the toy animation.
-Space plays/pauses; arrow keys step when focus is outside an input or button.
-**Full screen** hides browser chrome where supported; the browser's own full-screen
-shortcut also works. Browser zoom can help on a projector.
+**Steps → Extra explanations** holds clipping, wide totals, bias/rescaling,
+and disagreement examples. **Explore** opens the full controls, 31-image gallery,
+raw scores, hidden values and sweep charts. **Return to demo** restores the same
+lesson and result; Explore keeps its own settings. The finish screen gives a clear
+return point to the PowerPoint without opening or focusing another application.
+
+**Full screen** uses the browser's full-screen mode. Keyboard activation works on
+buttons; right/left arrow keys act/go back when focus is outside controls.
+The animation advances only when requested. Reduced motion still supports stepping.
 
 ## What the results mean
 
@@ -101,16 +112,17 @@ python -m demo.tests.browser_check
 ```
 
 The browser checks block external requests and exercise playback, inference stages,
-bad-setting recovery, all 13 tour scenes, and desktop/projector/mobile layouts.
+bad-setting recovery, the six presentation stops and optional explanations, and desktop/projector/mobile layouts.
 With their default local server, backend connections are restricted to loopback too.
 `--url http://127.0.0.1:PORT` checks an existing server; `--screenshots PATH` saves
 actual browser captures. These tools are not required for presenting.
 
-Verification on November 20, 2026: all 26 checks passed on native Windows
-(Python 3.11 and 3.13) and Linux/WSL (Python 3.12). A fresh GitHub checkout passed
-setup, offline restart, and the full Chromium interaction/layout checks without
-private files. The macOS launcher shares the tested POSIX script but has not
-been run on a Mac.
+Verification on November 20, 2026: the redesigned app passes 27 calculation,
+asset, HTTP and launcher checks on Linux/WSL Python 3.12. Headless Chromium checks
+cover every presentation action, optional explanation, error recovery, keyboard
+navigation, Explore/return, laptop/projector/mobile layouts and enlarged content.
+The unchanged launchers were previously checked on native Windows Python 3.11/3.13.
+The macOS launcher shares the POSIX script but has not been run on a Mac.
 
 `runtime.py` preserves the numerical and scheduling definitions from notebooks
 03 and 05; tests check notebook parity and the published timing sweeps.
