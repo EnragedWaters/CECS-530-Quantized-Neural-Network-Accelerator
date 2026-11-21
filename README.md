@@ -61,6 +61,13 @@ automatically. Fresh exports replace these snapshots when publishing new results
 
 [Project scope](docs/scope.md) · [Design references](docs/reference-review.md) · [Project report](report/project-report.md) · [Presentation and speaker notes](presentation/speaker-notes.md)
 
+## Presentation
+
+Open **presentation/project-presentation.pptx** for the visual Ocean Waves slides,
+or the matching **project-presentation.pdf** handout. The talk has 14 main slides
+and four hidden backups, with real photos, diagrams and checked results charts.
+[Speaker notes and timing](presentation/speaker-notes.md) · [Slide files and editing](presentation/README.md).
+
 ## Team members
 
 Tuong Tran · Troy Waters

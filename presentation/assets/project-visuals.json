@@ -1,0 +1,74 @@
+[
+  {
+    "file": "demo-lanes.png",
+    "kind": "actual headless browser capture",
+    "source": "demo step 3",
+    "source_commit": "f2fe21e",
+    "changes": "Unedited capture of the lesson visual, after both format runs",
+    "sha256": "1d3525a3d51ac21c4b2adaef193f71a5a253440435d894ed1c5b3500c9813845"
+  },
+  {
+    "file": "demo-scores.png",
+    "kind": "actual headless browser capture",
+    "source": "demo step 4",
+    "source_commit": "f2fe21e",
+    "changes": "Unedited capture of the lesson visual, after both format runs",
+    "sha256": "bc11a7cc91289f78ac22d36ca1996b0c614e737cc8e5eaf50f18b61b3070e6e7"
+  },
+  {
+    "file": "digit-0.png",
+    "kind": "actual MNIST pixel data",
+    "source": "demo/assets/examples.npz",
+    "source_commit": "f2fe21e",
+    "changes": "28 × 28 pixels enlarged tenfold with nearest-neighbor sampling",
+    "sha256": "950df9c569f98e4c01dfb55ceea732819268632f0aea8a56f749e9cc04d51394"
+  },
+  {
+    "file": "digit-1.png",
+    "kind": "actual MNIST pixel data",
+    "source": "demo/assets/examples.npz",
+    "source_commit": "f2fe21e",
+    "changes": "28 × 28 pixels enlarged tenfold with nearest-neighbor sampling",
+    "sha256": "9f1787fda0f42406a2a31cd69d2d555e972dd81bbded4bea83926ec3409ba554"
+  },
+  {
+    "file": "digit-2.png",
+    "kind": "actual MNIST pixel data",
+    "source": "demo/assets/examples.npz",
+    "source_commit": "f2fe21e",
+    "changes": "28 × 28 pixels enlarged tenfold with nearest-neighbor sampling",
+    "sha256": "9088ca74308382087eecde9385ad18cf6d51b54893f9dcdfa7777d9647967952"
+  },
+  {
+    "file": "digit-3.png",
+    "kind": "actual MNIST pixel data",
+    "source": "demo/assets/examples.npz",
+    "source_commit": "f2fe21e",
+    "changes": "28 × 28 pixels enlarged tenfold with nearest-neighbor sampling",
+    "sha256": "70b7c7c5db7b86b0a9a4e8b27e3adf5ae1dd85762655e34f778fb8cc19c03c56"
+  },
+  {
+    "file": "digit-4.png",
+    "kind": "actual MNIST pixel data",
+    "source": "demo/assets/examples.npz",
+    "source_commit": "f2fe21e",
+    "changes": "28 × 28 pixels enlarged tenfold with nearest-neighbor sampling",
+    "sha256": "2d07d28c408df62d6812d549764229fae2cbb7a53d41d8c3dee5d06ae96ad542"
+  },
+  {
+    "file": "digit-5.png",
+    "kind": "actual MNIST pixel data",
+    "source": "demo/assets/examples.npz",
+    "source_commit": "f2fe21e",
+    "changes": "28 × 28 pixels enlarged tenfold with nearest-neighbor sampling",
+    "sha256": "f2c2f914b6b725f16a59008eac3c076d6828448605cce9a3ff52e3287b50c620"
+  },
+  {
+    "file": "digit-8.png",
+    "kind": "actual MNIST pixel data",
+    "source": "demo/assets/examples.npz",
+    "source_commit": "f2fe21e",
+    "changes": "28 × 28 pixels enlarged tenfold with nearest-neighbor sampling",
+    "sha256": "fcdb9540b9ca07e3b8c47c7e1706ad2eb04d554a6701b73ed74e6268874a5dea"
+  }
+]

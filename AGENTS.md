@@ -67,3 +67,24 @@ arithmetic. Selected terms must be labeled as a subset of the full dot product.
 Run browser checks with `headless=True` (the default), background servers, and no
 `--open`. Do not open foreground windows or change the user's focused tab. Do not
 turn this slide companion into a lecture or modify submitted slides to add it.
+
+## Presentation editing
+
+The visual Ocean Waves deck has 14 main slides plus four hidden backups; its
+PDF includes all 18. Preserve the planned 900-second talk and detailed notes.
+`presentation/build_slides.py` builds native editable diagrams/charts using the
+checked JSON exports and `slide-notes.json`. Update the Markdown speaking guide
+when changing notes, then regenerate and inspect the matching PDF. See
+`presentation/README.md` for authoring commands and the rebuild behavior.
+
+Use relevant real photographs with documented reuse permission; no AI-generated
+bitmap imagery. Keep original photo bytes and record creator, source, license,
+purpose and SHA-256 under `presentation/assets/` and `visual-sources.md`. Actual
+project pixels/captures have their own provenance manifest. Hardware photos are
+context and must not imply that our accelerator was physically built or measured.
+
+Run `python presentation/verify_slides.py` after deck changes. Check every main
+and backup slide visually for wrapping, chart labels, contrast and picture crops.
+Keep rendering headless and preserve the ignored original presentation backup.
+These presentation changes do not authorize changing numerical results or the
+report; normal commit/push authorization still comes from the current request.
