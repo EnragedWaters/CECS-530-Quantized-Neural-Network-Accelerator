@@ -13,8 +13,8 @@ __pycache__/
 /workloads/mnist/data/*.gz
 /notebooks/mnist-cache/
 
-# Local prototype files; the notebook is the current project artifact.
-# Introduce other files only when needed for a reviewed project step.
+# Old prototype paths stay ignored if regenerated.
+# Archived copies live together under _local/legacy-prototype/.
 /configs/
 /qnn/
 /tests/

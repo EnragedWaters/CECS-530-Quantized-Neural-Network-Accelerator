@@ -106,6 +106,12 @@ With their default local server, backend connections are restricted to loopback 
 `--url http://127.0.0.1:PORT` checks an existing server; `--screenshots PATH` saves
 actual browser captures. These tools are not required for presenting.
 
+Verification on November 20, 2026: all 26 checks passed on native Windows
+(Python 3.11 and 3.13) and Linux/WSL (Python 3.12). A fresh GitHub checkout passed
+setup, offline restart, and the full Chromium interaction/layout checks without
+private files. The macOS launcher shares the tested POSIX script but has not
+been run on a Mac.
+
 `runtime.py` preserves the numerical and scheduling definitions from notebooks
 03 and 05; tests check notebook parity and the published timing sweeps.
 `assets/metadata.json` records source results, scales, hashes, selected image IDs,
