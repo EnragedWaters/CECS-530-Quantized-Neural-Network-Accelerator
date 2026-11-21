@@ -27,3 +27,15 @@ MNIST images come from the verified dataset/model bundle. Browser captures are
 actual headless renders of our checked demo. Architecture diagrams, timelines,
 lane illustrations and charts are native PowerPoint objects based on project
 assumptions and the two checked result exports. Notes credit the images used.
+
+The PNG manifest is [assets/project-visuals.json](assets/project-visuals.json).
+Digit filenames use the original MNIST test-image index (not the digit label).
+The underlying 28 × 28 pixels are enlarged tenfold by nearest-neighbor sampling,
+with no synthesized detail. `digit-8.png` is labeled 5 in the dataset; both
+checked predictions are 6.
+
+The captures use repository snapshot `f2fe21e`: `demo-lanes.png` is the main lane
+comparison after both precision runs; `demo-scores.png` is the score comparison
+for test image 0. They capture the actual lesson visual without changing values.
+The charts on slides 9, 11 and 12 embed editable numerical workbooks; the cycle
+bars on slide 10 are editable shapes sized from the same checked exports.
