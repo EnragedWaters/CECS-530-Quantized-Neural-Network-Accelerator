@@ -76,6 +76,16 @@ def check(url, screenshots=None):
         page.locator("#lesson-action").click()
         expect(page.locator(".learning-lane.working")).to_have_count(4)
         expect(page.locator(".learning-lane.waiting")).to_have_count(4)
+        for count in [1, 1, 3, 1, 1, 1]:
+            page.locator("#lesson-action").click()
+            expect(page.locator("#lesson-action")).to_be_enabled()
+            if "largest score" not in page.locator("#lesson-action").inner_text():
+                expect(page.locator(".prediction-reveal")).to_have_count(0)
+            for _ in range(count):
+                page.locator("#lesson-action").click()
+                expect(page.locator("#lesson-action")).to_be_enabled()
+            expect(page.locator("#lesson-result")).to_be_visible()
+        expect(page.locator("#lesson-result")).to_contain_text("Fifteen")
         page.locator("#choose-lesson").click()
         page.locator("#lesson-list button").nth(0).click()
         page.locator("#explore-toggle").click()

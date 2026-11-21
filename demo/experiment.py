@@ -32,6 +32,28 @@ def add_bias(raw, bias):
     return total.astype(np.int32)
 
 
+def inspect_dot(values, weights, raw, bias, output_index):
+    """Expose three actual terms and the full computed total, never a giant trace."""
+    column = weights[:, output_index]
+    nonzero = np.flatnonzero((values[0] != 0) & (column != 0)).tolist()
+    selected = (nonzero + [i for i in range(len(column)) if i not in nonzero])[:3]
+    return {
+        "output_index": output_index,
+        "term_count": len(column),
+        "terms": [
+            {
+                "index": i,
+                "input": int(values[0, i]),
+                "weight": int(column[i]),
+                "product": int(values[0, i]) * int(column[i]),
+            }
+            for i in selected
+        ],
+        "raw_total": int(raw[0][output_index]),
+        "bias": int(bias[output_index]),
+    }
+
+
 def predict_example(example_id, config, bundle):
     if type(example_id) is not int:
         raise ValueError("Choose an example from the gallery.")
@@ -93,10 +115,23 @@ def predict_example(example_id, config, bundle):
         raise ValueError(
             "Simulator result differs from its independent numerical reference."
         )
-    # Dequantization is for the plot only; argmax above uses the raw INT32 scores.
+    # Dequantization is for the plot only; predictions use raw INT32 scores.
     display_scores = scores_int.astype(np.float64) * (
         settings["activation_scale"] * settings["w2_scale"]
     )
+    positive = np.flatnonzero(hidden_int[0] > 0)
+    selected_hidden = int(positive[0]) if len(positive) else 0
+    first = inspect_dot(qx, integer["w1"], int1.output, integer["b1"], selected_hidden)
+    first.update(
+        biased_total=int(biased[0, selected_hidden]),
+        relu_total=max(0, int(biased[0, selected_hidden])),
+        stored_hidden=int(hidden_int[0, selected_hidden]),
+        fp32_raw_total=float(fp1.output[0][selected_hidden]),
+        fp32_bias=float(fp["b1"][selected_hidden]),
+        fp32_hidden=float(hidden_fp[0, selected_hidden]),
+    )
+    second = inspect_dot(hidden_int, integer["w2"], int2.output, integer["b2"], 0)
+    second["score"] = int(scores_int[0, 0])
     return {
         "example_id": example_id,
         "label": int(bundle["labels"][position]),
@@ -122,6 +157,7 @@ def predict_example(example_id, config, bundle):
         },
         "verification": {"integer_exact": int_ok, "fp32_within_tolerance": fp_ok},
         "quantization": settings,
+        "inspection": {"first": first, "second": second},
     }
 
 

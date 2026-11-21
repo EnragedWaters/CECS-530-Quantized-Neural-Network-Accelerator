@@ -184,3 +184,176 @@ lessons.push(
     },
   },
 );
+
+const cache = new Map();
+function cached(api, path, body) {
+  const key = path + JSON.stringify(body);
+  if (!cache.has(key))
+    cache.set(
+      key,
+      api(path, body).catch((error) => {
+        cache.delete(key);
+        throw error;
+      }),
+    );
+  return cache.get(key);
+}
+const digit = (api) => cached(api, "/api/infer", { example_id: 0 });
+const pipeline = (current) =>
+  `<div class="network-pipeline">${["Pixels", "First layer", "Hidden values", "Second layer", "Digit scores"].map((name, i) => `<span class="${i === current ? "selected" : ""}">${name}</span>`).join('<b aria-hidden="true">→</b>')}</div>`;
+function pixels(r, show = false) {
+  if (!r) return ready(r);
+  const i = r.pixels.findIndex((v) => v > 0 && v < 255),
+    p = r.pixels;
+  return `<div class="pixel-story"><div class="pixel-image" role="img" aria-label="Actual MNIST test image 0, known digit ${r.label}">${p.map((v, j) => `<i class="${show && j === i ? "picked" : ""}" style="background:rgb(${v},${v},${v})"></i>`).join("")}</div><div>${show ? `<p>Pixel ${Math.floor(i / 28)}, ${i % 28}</p><p class="fp">Normalized FP32: <b>${fmt(r.inputs_fp32[i], 4)}</b></p><p class="int">Stored INT8: <b>${r.inputs_int8[i]}</b></p>` : "<p>28 × 28 pixels = 784 inputs.</p><p>The model was trained beforehand.</p>"}</div></div>`;
+}
+function dot(r, which) {
+  const d = r.inspection[which];
+  return `<div class="dot-inspection"><p>INT8 output ${d.output_index} · ${d.term_count} input/weight pairs</p><div class="term-row">${d.terms.map((t) => `<div class="term revealed"><span>${t.input} × ${t.weight}</span><strong>${fmt(t.product, 0)}</strong></div>`).join('<span class="arrow">+</span>')}<span class="arrow">+ …</span></div><div class="dot-total">Full INT32 total <strong>${fmt(d.raw_total, 0)}</strong>${which === "second" ? `<span>+ learned bias ${fmt(d.bias, 0)} = score ${fmt(d.score, 0)}</span>` : ""}</div><p class="caption">Showing ${d.terms.length} of ${d.term_count} terms; the total includes every term.</p></div>`;
+}
+function hidden(r, step = 3) {
+  const d = r.inspection.first;
+  return `<div class="number-story">${number("Raw INT32", fmt(d.raw_total, 0), `+ learned bias ${fmt(d.bias, 0)}`)}<span class="arrow">→</span>${number(step >= 2 ? "After ReLU" : "After bias", step >= 1 ? fmt(step >= 2 ? d.relu_total : d.biased_total, 0) : "?", "negative values become 0", step === 1 || step === 2)}<span class="arrow">→</span>${number("Stored hidden INT8", step >= 3 ? d.stored_hidden : "?", "rescaled for the next layer", step === 3)}</div><p class="caption">One of 64 hidden values · bias, ReLU and rescaling are computed but untimed.</p>`;
+}
+function scoreChart(r, reveal = false) {
+  const width = 720,
+    height = 205,
+    min = Math.min(0, ...r.fp32.scores, ...r.int8.scores_display),
+    max = Math.max(0, ...r.fp32.scores, ...r.int8.scores_display),
+    y = (v) => height - 24 - ((v - min) / (max - min)) * (height - 48),
+    zero = y(0);
+  const bars = [];
+  for (let i = 0; i < 10; i++)
+    for (const [offset, values, color, name, pred] of [
+      [0, r.fp32.scores, "#287298", "FP32", r.fp32.prediction],
+      [23, r.int8.scores_display, "#ad5934", "INT8", r.int8.prediction],
+    ]) {
+      const yy = y(values[i]),
+        x = 23 + i * 69 + offset;
+      bars.push(
+        `<rect x="${x}" y="${Math.min(yy, zero)}" width="20" height="${Math.max(1, Math.abs(yy - zero))}" fill="${color}" ${reveal && i === pred ? 'stroke="#12394e" stroke-width="3"' : ""}><title>${name} digit ${i}: ${fmt(values[i], 4)}</title></rect>`,
+      );
+    }
+  return `<svg class="learning-scores" viewBox="0 0 ${width} ${height}" role="img" aria-label="Ten FP32 and INT8 scores, not probabilities"><line x1="16" x2="708" y1="${zero}" y2="${zero}" stroke="#a6c4d1"/>${bars.join("")}${Array.from({ length: 10 }, (_, i) => `<text x="${44 + i * 69}" y="202" text-anchor="middle">${i}</text>`).join("")}</svg><div class="score-key"><span class="fp">● FP32</span><span class="int">● INT8 in comparable display units</span>${reveal ? `<b class="prediction-reveal">Predicted digit: FP32 ${r.fp32.prediction} · INT8 ${r.int8.prediction}</b>` : ""}</div><p class="caption">The largest score wins. INT8 uses raw INT32 scores; chart conversion is only for display.</p>`;
+}
+lessons.push(
+  {
+    id: "pixels",
+    chapter: "A real prediction",
+    title: "What does the network receive?",
+    steps: 1,
+    instruction:
+      "Press “Inspect this pixel” to compare two representations of a real image value. This image has 784 input values.",
+    button: "Inspect this pixel",
+    load: digit,
+    act: () => undefined,
+    render: ({ step, data }) =>
+      !data ? ready(data) : pipeline(0) + pixels(data, !!step),
+    explain: ({ data }) =>
+      `What changed: one actual pixel is highlighted. FP32 normalizes its byte value by 255; INT8 represents the input in steps of 1/127.`,
+  },
+  {
+    id: "first",
+    chapter: "A real prediction",
+    title: "How are 784 inputs combined?",
+    steps: 1,
+    instruction:
+      "Press “Show the first-layer calculation” to inspect one real output. Each of the 64 outputs combines 784 input/weight pairs.",
+    button: "Show the first-layer calculation",
+    load: digit,
+    act: () => undefined,
+    render: ({ step, data }) =>
+      !data
+        ? ready(data)
+        : pipeline(1) +
+          (step
+            ? dot(data, "first")
+            : '<p class="visual-prompt">784 inputs × learned weights → 64 running totals</p>'),
+    explain: () =>
+      `What changed: one complete output total is shown, alongside three of its 784 terms. The weights were learned during training.`,
+  },
+  {
+    id: "hidden",
+    chapter: "A real prediction",
+    title: "How does a total become a hidden value?",
+    steps: 3,
+    instruction: ({ step }) =>
+      [
+        "Press “Add the learned bias” to add a learned offset to one total.",
+        "Press “Apply ReLU” to keep positive values and replace negative values with zero.",
+        "Press “Rescale to INT8” to express the hidden value in the next layer’s units.",
+      ][step],
+    button: ({ step }) =>
+      ["Add the learned bias", "Apply ReLU", "Rescale to INT8"][step],
+    load: digit,
+    act: () => undefined,
+    render: ({ step, data }) =>
+      !data ? ready(data) : pipeline(2) + hidden(data, step),
+    explain: ({ step, data }) => {
+      const d = data.inspection.first;
+      return [
+        "",
+        "What changed: the learned bias is added in the same units as the running total.",
+        `What changed: ReLU keeps ${fmt(d.relu_total, 0)}. Negative totals would become zero; this selected value is ${d.biased_total < 0 ? "negative" : "already nonnegative"}.`,
+        `What changed: rescaling stores ${d.stored_hidden} in INT8 for the second layer. The model’s calibrated scale stays fixed.`,
+      ][step];
+    },
+  },
+  {
+    id: "second",
+    chapter: "A real prediction",
+    title: "How do 64 values become ten scores?",
+    steps: 1,
+    instruction:
+      "Press “Show the ten scores” to inspect one second-layer calculation. Its 64 hidden inputs contribute to a score for one digit.",
+    button: "Show the ten scores",
+    load: digit,
+    act: () => undefined,
+    render: ({ step, data }) =>
+      !data
+        ? ready(data)
+        : pipeline(3) +
+          (step
+            ? dot(data, "second")
+            : '<p class="visual-prompt">64 hidden values × learned weights → ten digit scores</p>'),
+    explain: () =>
+      `What changed: the full sum and learned bias produce a digit score. The model performs one such calculation for each of ten digits.`,
+  },
+  {
+    id: "scores",
+    chapter: "A real prediction",
+    title: "Which digit does the model choose?",
+    steps: 1,
+    instruction:
+      "Press “Highlight the largest score” to reveal the predicted digit for each numerical format. These scores are not confidence percentages.",
+    button: "Highlight the largest score",
+    load: digit,
+    act: () => undefined,
+    render: ({ step, data }) =>
+      !data ? ready(data) : pipeline(4) + scoreChart(data, !!step),
+    explain: ({ data }) =>
+      `What changed: the largest raw score chooses FP32 ${data.fp32.prediction} and INT8 ${data.int8.prediction}. Independent arithmetic checks pass for both calculations.`,
+  },
+  {
+    id: "disagreement",
+    chapter: "A real prediction",
+    title: "Can quantization change the prediction?",
+    steps: 1,
+    instruction:
+      "Press “Show a disagreement” to run an example where FP32 and INT8 choose different digits.",
+    button: "Show a disagreement",
+    act: async (_, api) => {
+      const meta = await cached(api, "/api/meta");
+      return cached(api, "/api/infer", {
+        example_id: meta.examples.find((e) => e.disagreement).id,
+      });
+    },
+    render: ({ step, data }) =>
+      step
+        ? `<p class="caption">Actual MNIST image ${data.example_id} · known digit ${data.label}</p>` +
+          scoreChart(data, true)
+        : '<p class="visual-prompt">Rounding may change the winning score.</p>',
+    explain: ({ data }) =>
+      `What changed: FP32 predicts ${data.fp32.prediction}; INT8 predicts ${data.int8.prediction}. Fifteen of the original 10,000 test predictions differed; this is one of them.`,
+  },
+);

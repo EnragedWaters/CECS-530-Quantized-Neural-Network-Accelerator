@@ -78,5 +78,49 @@ class HardwareTests(unittest.TestCase):
         self.assertNotIn("error", r["results"]["int8"])
 
 
+class InspectionTests(unittest.TestCase):
+    def test_terms_totals_biases_and_rescaling_match_independent_arithmetic(self):
+        import numpy as np
+
+        bundle = load_bundle()
+        model = bundle["int8"]
+        for image_id in (0, 8, 158):
+            result = predict_example(
+                image_id, AcceleratorConfig(8, 262144, 32, 32), bundle
+            )
+            for layer, inputs, weights, bias in (
+                ("first", result["inputs_int8"], model["w1"], model["b1"]),
+                ("second", result["int8"]["hidden"], model["w2"], model["b2"]),
+            ):
+                d = result["inspection"][layer]
+                j = d["output_index"]
+                expected = sum(int(v) * int(w) for v, w in zip(inputs, weights[:, j]))
+                self.assertEqual(d["raw_total"], expected)
+                self.assertEqual(d["bias"], int(bias[j]))
+                self.assertEqual(d["term_count"], len(inputs))
+                self.assertEqual(len(d["terms"]), 3)
+                for term in d["terms"]:
+                    self.assertEqual(
+                        term["product"],
+                        int(inputs[term["index"]]) * int(weights[term["index"], j]),
+                    )
+            d = result["inspection"]["first"]
+            j = d["output_index"]
+            self.assertEqual(d["biased_total"], d["raw_total"] + d["bias"])
+            self.assertEqual(d["relu_total"], max(0, d["biased_total"]))
+            numerator = d["relu_total"] * model["multiplier"]
+            denominator = 1 << model["shift"]
+            q, rem = divmod(numerator, denominator)
+            expected = min(
+                127,
+                q + int(2 * rem > denominator or (2 * rem == denominator and q % 2)),
+            )
+            self.assertEqual(d["stored_hidden"], expected)
+            self.assertEqual(d["stored_hidden"], result["int8"]["hidden"][j])
+            self.assertEqual(
+                result["inspection"]["second"]["score"], result["int8"]["scores"][0]
+            )
+
+
 if __name__ == "__main__":
     unittest.main()
