@@ -4,6 +4,7 @@ The algorithms follow notebooks 03 and 05. Those notebooks remain standalone;
 parity tests check this small reusable runtime against their definitions.
 Only trace descriptions are enriched for animation; scheduling is unchanged.
 """
+
 from dataclasses import asdict, dataclass, replace
 import math
 import struct
@@ -74,7 +75,9 @@ class AcceleratorConfig:
             if type(value) is not int or value <= 0:
                 raise ValueError(f"{name} must be a positive integer.")
         if self.local_read_bytes_per_cycle < 2:
-            raise ValueError("The local read bus must support at least one INT8 operand pair.")
+            raise ValueError(
+                "The local read bus must support at least one INT8 operand pair."
+            )
 
 
 @dataclass
@@ -128,9 +131,15 @@ def simulate_matmul(left, right, config=None, *, record_trace=True, precision="i
             moved = min(remaining, config.external_bytes_per_cycle)
             cycle += 1
             if record_trace:
-                trace.append({"cycle": cycle, "phase": phase, "bytes": moved,
-                              "phase_total_bytes": byte_count,
-                              "phase_moved_bytes": byte_count - remaining + moved})
+                trace.append(
+                    {
+                        "cycle": cycle,
+                        "phase": phase,
+                        "bytes": moved,
+                        "phase_total_bytes": byte_count,
+                        "phase_moved_bytes": byte_count - remaining + moved,
+                    }
+                )
             remaining -= moved
         phase_cycles[phase] = cycle - start
 
@@ -144,7 +153,7 @@ def simulate_matmul(left, right, config=None, *, record_trace=True, precision="i
     mac = checked_mac if precision == "int8" else fp32_mac
 
     for group_start in range(0, len(outputs), config.lanes):
-        jobs = outputs[group_start:group_start + config.lanes]
+        jobs = outputs[group_start : group_start + config.lanes]
         progress = [0] * len(jobs)
         cursor = 0
         while any(k < inner for k in progress):
@@ -166,33 +175,51 @@ def simulate_matmul(left, right, config=None, *, record_trace=True, precision="i
                 progress[lane] += 1
                 mac_count += 1
                 if record_trace:
-                    operations.append({
-                        "lane": lane, "output": [row, column], "k": k,
-                        "left": a, "right": b,
-                        "product": fp32(a * b) if precision == "fp32" else a * b,
-                        "accumulator_before": before,
-                        "accumulator": output[row][column],
-                        "finished": progress[lane] == inner,
-                    })
+                    operations.append(
+                        {
+                            "lane": lane,
+                            "output": [row, column],
+                            "k": k,
+                            "left": a,
+                            "right": b,
+                            "product": fp32(a * b) if precision == "fp32" else a * b,
+                            "accumulator_before": before,
+                            "accumulator": output[row][column],
+                            "finished": progress[lane] == inner,
+                        }
+                    )
             cursor = (issued[-1] + 1) % len(jobs)
             if record_trace:
-                trace.append({"cycle": cycle, "phase": "compute", "macs": operations,
-                              "group_start": group_start, "active_lanes": issued,
-                              "waiting_lanes": ready[len(issued):],
-                              "unused_lanes": list(range(len(jobs), config.lanes)),
-                              "finished_lanes": [lane for lane in range(len(jobs))
-                                                 if progress[lane] == inner]})
+                trace.append(
+                    {
+                        "cycle": cycle,
+                        "phase": "compute",
+                        "macs": operations,
+                        "group_start": group_start,
+                        "active_lanes": issued,
+                        "waiting_lanes": ready[len(issued) :],
+                        "unused_lanes": list(range(len(jobs), config.lanes)),
+                        "finished_lanes": [
+                            lane for lane in range(len(jobs)) if progress[lane] == inner
+                        ],
+                    }
+                )
 
     phase_cycles["compute"] = cycle - compute_start
     transfer("store_outputs", output_bytes)
     compute_cycles = phase_cycles["compute"]
     metrics = {
         "precision": precision,
-        "rows": rows, "inner": inner, "columns": columns,
-        "macs": mac_count, "total_cycles": cycle,
+        "rows": rows,
+        "inner": inner,
+        "columns": columns,
+        "macs": mac_count,
+        "total_cycles": cycle,
         **{f"{phase}_cycles": count for phase, count in phase_cycles.items()},
-        "input_bytes": input_bytes, "weight_bytes": weight_bytes,
-        "output_bytes": output_bytes, "scratchpad_required_bytes": required,
+        "input_bytes": input_bytes,
+        "weight_bytes": weight_bytes,
+        "output_bytes": output_bytes,
+        "scratchpad_required_bytes": required,
         "external_bytes_transferred": input_bytes + weight_bytes + output_bytes,
         "local_operand_bytes_read": pair_bytes * mac_count,
         "bandwidth_blocked_lane_cycles": blocked_lane_cycles,
@@ -229,10 +256,15 @@ def first_layer_int8(values, weights, bias, *, input_scale, weight_scale):
     return totals, linear
 
 
-def calibrate_activation_scale(calibration_values, weights, bias, *, input_scale, weight_scale):
+def calibrate_activation_scale(
+    calibration_values, weights, bias, *, input_scale, weight_scale
+):
     _, linear = first_layer_int8(
-        calibration_values, weights, bias,
-        input_scale=input_scale, weight_scale=weight_scale,
+        calibration_values,
+        weights,
+        bias,
+        input_scale=input_scale,
+        weight_scale=weight_scale,
     )
     maximum = float(np.maximum(linear, np.float32(0)).max())
     return maximum / 127.0 if maximum else 1.0
@@ -254,8 +286,13 @@ def quantize_bias_int32(bias, scale):
 def checked_integer_linear(values, weights, bias):
     if values.dtype != np.int8 or weights.dtype != np.int8 or bias.dtype != np.int32:
         raise TypeError("Expected INT8 operands and INT32 bias.")
-    if (values.ndim != 2 or weights.ndim != 2 or bias.ndim != 1
-            or values.shape[1] != weights.shape[0] or weights.shape[1] != len(bias)):
+    if (
+        values.ndim != 2
+        or weights.ndim != 2
+        or bias.ndim != 1
+        or values.shape[1] != weights.shape[0]
+        or weights.shape[1] != len(bias)
+    ):
         raise ValueError("Layer dimensions do not match.")
     if np.any(values == -128) or np.any(weights == -128):
         raise ValueError("This model uses the narrow signed range -127 through 127.")
@@ -263,9 +300,14 @@ def checked_integer_linear(values, weights, bias):
     bound = 127 * np.abs(weights.astype(np.int64)).sum(axis=0)
     bias64 = bias.astype(np.int64)
     limits = np.iinfo(np.int32)
-    if (np.any(bound > limits.max) or np.any(bias64 + bound > limits.max)
-            or np.any(bias64 - bound < limits.min)):
-        raise OverflowError("Layer cannot be guaranteed to accumulate and add bias in INT32.")
+    if (
+        np.any(bound > limits.max)
+        or np.any(bias64 + bound > limits.max)
+        or np.any(bias64 - bound < limits.min)
+    ):
+        raise OverflowError(
+            "Layer cannot be guaranteed to accumulate and add bias in INT32."
+        )
     raw = values.astype(np.int32) @ weights.astype(np.int32)
     return raw, raw + bias
 
@@ -273,9 +315,12 @@ def checked_integer_linear(values, weights, bias):
 def requantize_relu_integer(accumulators, multiplier, shift):
     if accumulators.dtype.kind != "i":
         raise TypeError("Rescaling requires signed integer totals.")
-    if (not isinstance(multiplier, (int, np.integer))
-            or not isinstance(shift, (int, np.integer))
-            or not 0 < multiplier < 2**31 or not 1 <= shift <= 62):
+    if (
+        not isinstance(multiplier, (int, np.integer))
+        or not isinstance(shift, (int, np.integer))
+        or not 0 < multiplier < 2**31
+        or not 1 <= shift <= 62
+    ):
         raise ValueError("Invalid integer rescaling multiplier or shift.")
     multiplier, shift = int(multiplier), int(shift)
     positive = np.maximum(accumulators.astype(np.int64), 0)
@@ -293,10 +338,18 @@ def requantize_relu_integer(accumulators, multiplier, shift):
 
 def forward_integer_int8(values, model):
     raw1, biased1 = checked_integer_linear(values, model["w1"], model["b1"])
-    hidden, clipped = requantize_relu_integer(biased1, model["multiplier"], model["shift"])
+    hidden, clipped = requantize_relu_integer(
+        biased1, model["multiplier"], model["shift"]
+    )
     raw2, scores = checked_integer_linear(hidden, model["w2"], model["b2"])
-    return {"raw1": raw1, "biased1": biased1, "hidden": hidden,
-            "raw2": raw2, "scores": scores, "hidden_clipped_values": clipped}
+    return {
+        "raw1": raw1,
+        "biased1": biased1,
+        "hidden": hidden,
+        "raw2": raw2,
+        "scores": scores,
+        "hidden_clipped_values": clipped,
+    }
 
 
 def forward_fp32(inputs, model):
