@@ -7,8 +7,10 @@ started copy; --screenshots saves actual desktop/projector/mobile renderings.
 
 import argparse
 from pathlib import Path
+import socket
 import threading
 from urllib.parse import urlsplit
+from unittest.mock import patch
 from playwright.sync_api import sync_playwright, expect
 
 
@@ -187,11 +189,22 @@ if __name__ == "__main__":
     parser.add_argument("--url")
     parser.add_argument("--screenshots", type=Path)
     args = parser.parse_args()
-    server = thread = None
+    server = thread = guard = None
     try:
         if args.url:
             url = args.url
         else:
+            connect = socket.socket.connect
+
+            def loopback_only(connection, address):
+                if connection.family in (socket.AF_INET, socket.AF_INET6) and address[
+                    0
+                ] not in ("127.0.0.1", "::1"):
+                    raise AssertionError("External backend connection: " + str(address))
+                return connect(connection, address)
+
+            guard = patch.object(socket.socket, "connect", loopback_only)
+            guard.start()
             from demo.server import make_server
 
             server = make_server(0)
@@ -204,3 +217,5 @@ if __name__ == "__main__":
             server.shutdown()
             server.server_close()
             thread.join()
+        if guard:
+            guard.stop()

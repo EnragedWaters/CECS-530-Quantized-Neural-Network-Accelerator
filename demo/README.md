@@ -102,6 +102,7 @@ python -m demo.tests.browser_check
 
 The browser checks block external requests and exercise playback, inference stages,
 bad-setting recovery, all 13 tour scenes, and desktop/projector/mobile layouts.
+With their default local server, backend connections are restricted to loopback too.
 `--url http://127.0.0.1:PORT` checks an existing server; `--screenshots PATH` saves
 actual browser captures. These tools are not required for presenting.
 
